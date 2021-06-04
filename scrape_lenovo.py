@@ -26,9 +26,10 @@ def get_info(prod, button):
     info = {}
 
     pn = ''
+    part = prod.find('div', {'class': 'partNumber'})
     if prod.has_attr('data-code'):
         pn = prod['data-code']
-    elif part := prod.find('div', {'class': 'partNumber'}):
+    elif part:
         pn = part.text.split('\xa0')[-1]
     elif button.has_attr('data-productcode'):
         pn = button['data-productcode']
