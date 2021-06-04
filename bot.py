@@ -4,6 +4,8 @@ import re
 import configparser
 import time
 import json
+import os, sys
+import atexit
 from datetime import datetime,timezone,timedelta
 
 from watchdog.observers import Observer
@@ -12,14 +14,18 @@ from watchdog.events import FileSystemEventHandler
 from discord.ext import commands
 import discord
 
+def exit():
+    print('Exiting...')
+atexit.register(exit)
+
 class FileHandler(FileSystemEventHandler):
     def on_modified(self, event):
         global db
-        if event.src_path.endswith('db.json'):
+        if event.src_path.endswith(DB_FILENAME):
             print(f'{event.src_path} modified')
             for i in range(5):
                 try:
-                    db = lelnovo.get_db('db.json')
+                    db = lelnovo.get_db(DB_FILENAME)
                     print('database updated:')
                     print(lelnovo.get_footer(db))
                     break
@@ -27,24 +33,27 @@ class FileHandler(FileSystemEventHandler):
                     print(f'JSON load error. Retrying ({i}/5)...')
                     time.sleep(1)
 
-BOT_PREFIX = ('!lelnovo ')
 CFG_FILENAME = 'config.ini'
-CFG = configparser.ConfigParser()
-CFG.read(CFG_FILENAME)
-TOKEN = CFG['discord']['token']
+DB_FILENAME = 'db.json'
+
+BOT_PREFIX = ('!lelnovo ')
 bot = discord.ext.commands.Bot(command_prefix=BOT_PREFIX)
 
-db = lelnovo.get_db('db.json')
-print(lelnovo.get_footer(db))
-
-file_handler = FileHandler()
-observer = Observer()
-observer.schedule(file_handler, path='./db.json')
+db = {}
 
 @bot.event
 async def on_ready():
+    global db
     print('Logged in as {0}'.format(bot.user.name))
+
+    file_handler = FileHandler()
+    observer = Observer()
+    observer.schedule(file_handler, path=f'./{DB_FILENAME}')
     observer.start()
+    print(f'Monitoring \'{DB_FILENAME}\'')
+
+    db = lelnovo.get_db(DB_FILENAME)
+    print(lelnovo.get_footer(db))
 
 @bot.command(name='status',
     brief=lelnovo.command_briefs['status'],
@@ -162,4 +171,15 @@ async def cmd_search(context, *args):
         await context.send(embed=embed)
 
 if __name__ == '__main__':
-    bot.run(TOKEN)
+    cfg = configparser.ConfigParser()
+    cfg.read(CFG_FILENAME)
+    if not os.path.exists(CFG_FILENAME):
+        cfg.add_section('discord')
+        cfg.set('discord', 'token', '')
+        with open(CFG_FILENAME, 'w') as cfg_file: cfg.write(cfg_file)
+        print(f'Created template \'{CFG_FILENAME}\'. Add bot token and restart.')
+        sys.exit()
+
+    token = cfg['discord']['token']
+    if token: bot.run(token)
+    else:     print(f'Token not found in \'{CFG_FILENAME}\'')
