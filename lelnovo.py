@@ -158,7 +158,8 @@ def get_status(db):
 
 def get_db(filename):
     with open('db.json', 'r') as f:
-        return json.load(f)
+        js = f.read()
+        return json.loads(js)
 
 command_helps = {
     'listspecs': 'list valid specs and num_specs used in \'search\' and \'specs\' commands',
