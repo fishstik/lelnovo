@@ -119,7 +119,7 @@ def get_specs(part_num, db, specs=[]):
                             if spec in part:
                                 ret_specs[spec] = part[spec]
                             elif spec in part['num_specs']:
-                                ret_specs[spec] = part['num_specs'][spec]
+                                ret_specs[spec] = f'{part["num_specs"][spec][0]} {part["num_specs"][spec][1]}'
                     return part['name'], part['part number'], ret_specs
 
 
