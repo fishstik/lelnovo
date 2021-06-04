@@ -2,6 +2,8 @@ import lelnovo
 
 import re
 import configparser
+import time
+import json
 from datetime import datetime,timezone,timedelta
 
 from watchdog.observers import Observer
@@ -12,21 +14,19 @@ import discord
 
 class FileHandler(FileSystemEventHandler):
 
-    def __init__(self):
-        self.last_modified = datetime.now()
-
     def on_modified(self, event):
         global db
-
-        if datetime.now() - self.last_modified < timedelta(seconds=1):
-            return
-        else:
-            self.last_modified = datetime.now()
-
-        print(f'{event.src_path} modified. Updating...')
-        db = lelnovo.get_db('db.json')
-        print()
-        print(lelnovo.get_status(db))
+        if event.src_path.endswith('db.json'):
+            print(f'{event.src_path} modified. Updating...')
+            for i in range(5):
+                try:
+                    db = lelnovo.get_db('db.json')
+                    print()
+                    print(lelnovo.get_status(db))
+                    break
+                except json.decoder.JSONDecodeError:
+                    print(f'JSON load error. Retrying ({i}/5)...')
+                    time.sleep(1)
 
 BOT_PREFIX = ('!lelnovo ')
 CFG_FILENAME = 'config.ini'
