@@ -108,10 +108,14 @@ def search(query, db):
 
 def get_specs(part_num, db, specs=[]):
     ret_specs = {}
+    info = {}
     for brand, prods in db['data'].items():
         for prod, parts in prods.items():
             for part in parts:
                 if part_num.strip().lower() == part['part number'].strip().lower():
+                    info['name'] = part['name']
+                    info['part number'] = part['part number']
+                    info['price'] = part['num_specs']['price']
                     if not specs:
                         ret_specs = part
                     else:
@@ -120,37 +124,33 @@ def get_specs(part_num, db, specs=[]):
                                 ret_specs[spec] = part[spec]
                             elif spec in part['num_specs']:
                                 ret_specs[spec] = f'{part["num_specs"][spec][0]} {part["num_specs"][spec][1]}'
-                    return part['name'], part['part number'], ret_specs
+                    return info, ret_specs
 
+def format_specs(db, info, specs):
+    contents = ''
+    contents += (
+        f'[{info["part number"]}]({db["metadata"]["base url"]}/p/{info["part number"]})'
+        f' --- **{info["price"][1]}{info["price"][0]}**\n'
+    )
+    for spec, value in specs.items():
+        spacing = max([len(k) for k in specs.keys()])
+        if spec == 'num_specs':
+            contents += f'`{spec:>{spacing}}:`\n'
+            spacing = max([len(k) for k in specs['num_specs'].keys()])
+            for num_spec, tup in specs['num_specs'].items():
+                val, unit = tup
+                contents += f'`{num_spec:>{spacing}}  {val} {unit}`\n'
+        else:
+            contents += f'`{spec:>{spacing}}  {value}`\n'
 
-def show_specs(part_num, db, specs=[]):
-    for brand, prods in db['data'].items():
-        for prod, parts in prods.items():
-            for part in parts:
-                if part_num.strip().lower() == part['part number'].strip().lower():
-                    # always print part number and name
-                    print(f'{prod} -> {part["part number"]} | {part["name"]}')
-                    if not specs: # print all specs if none specified
-                        for name, val in part.items():
-                            if name == 'num_specs':
-                                print(f'{name+":":>20}')
-                                for spec, val in val.items():
-                                    print(f'  {spec:>30}  {val[0]} {val[1]}')
-                            else:
-                                print(f'{name:>20}  {val}')
-                    else:
-                        for spec in specs:
-                            if spec in part:
-                                print(f'{spec:>20}  {part[spec]}')
-                            elif spec in part['num_specs']:
-                                val, unit = part['num_specs'][spec]
-                                print(f'{spec:>20}  {val} {unit}')
+    return contents
 
 def get_status(db):
     total = 0
 
     dt = datetime.utcfromtimestamp(db['metadata']['timestamp'])
     return (
+        '_'*30 + '\n'
         f'{db["metadata"]["base url"]}\n'
         f'passcode: {db["metadata"]["passcode"]}\n'
         f'last update: {dt.strftime("%c")} UTC ({pretty_duration((datetime.utcnow() - dt).total_seconds())} ago)'
@@ -164,18 +164,22 @@ def get_db(filename):
 command_helps = {
     'listspecs': 'list valid specs and num_specs used in \'search\' and \'specs\' commands',
     'search': (
-        'search for products with search terms separated by commas.\n'
-        'valid searches:\n'
+        'search for products with search terms separated by commas. '
+        'use \'listspecs\' to view valid specs.\n'
+        '\n'
+        'possible search terms:\n'
         '  term          searches for \'term\' in any field\n'
         '  spec:term     searches for \'term\' in \'spec\'.\n'
         '  num_spec<num  searches for \'num_spec\' that satisfies the condition \'< num\'.\n'
-        '                valid operators are <,<=,==,!=,=>,>.\n'
+        '                valid operators are < <= == != => >\n'
         '\n'
         'example:\n'
-        '  "search x1e, price<1400, display:1080"\n'
+        '  "search x1e, price<1400, display:fhd"\n'
     ),
     'specs': (
-        'list all specs for a given product number. if arguments are given, lists the given comma-separated specs\n'
+        'list all specs for a given product number. '
+        'if arguments are given, lists the given comma-separated specs. '
+        'use \'listspecs\' to view valid specs.\n'
         '\n'
         'examples:\n'
         '  "specs 20TK001EUS"\n'
@@ -248,6 +252,12 @@ if __name__ == '__main__':
             part_num = words[0]
             # user-provided specs
             if len(words) > 1: specs = [s.strip() for s in words[1].split(',')]
-            show_specs(part_num, db, specs)
+            res = get_specs(part_num, db, specs)
+
+            if res:
+                info, ret_specs = res
+                if info and ret_specs: print(format_specs(db, info, ret_specs))
+            else:
+                print(f'Specs for \'{part_num}\' not found')
         else:
             print(f'Unrecognized command \'{command}\'')

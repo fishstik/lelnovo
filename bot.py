@@ -13,15 +13,14 @@ from discord.ext import commands
 import discord
 
 class FileHandler(FileSystemEventHandler):
-
     def on_modified(self, event):
         global db
         if event.src_path.endswith('db.json'):
-            print(f'{event.src_path} modified. Updating...')
+            print(f'{event.src_path} modified')
             for i in range(5):
                 try:
                     db = lelnovo.get_db('db.json')
-                    print()
+                    print('database updated:')
                     print(lelnovo.get_status(db))
                     break
                 except json.decoder.JSONDecodeError:
@@ -37,8 +36,6 @@ bot = discord.ext.commands.Bot(command_prefix=BOT_PREFIX)
 
 db = lelnovo.get_db('db.json')
 print(lelnovo.get_status(db))
-
-base_url = db['metadata']['base url']
 
 file_handler = FileHandler()
 observer = Observer()
@@ -56,8 +53,8 @@ async def on_ready():
 async def cmd_status(context):
     embed = discord.Embed(
         title='Database Status',
-        description=lelnovo.get_status(db),
     )
+    embed.set_footer(text = lelnovo.get_status(db))
     await context.send(embed=embed)
 
 @bot.command(name='listspecs',
@@ -99,30 +96,23 @@ async def cmd_specs(context, *args):
         part_num = words[0]
         # user-provided specs
         if len(words) > 1: specs = [s.strip() for s in words[1].split(',')]
-        name, pn, ret_specs = lelnovo.get_specs(part_num, db, specs)
+        res = lelnovo.get_specs(part_num, db, specs)
 
-        if name and pn and ret_specs:
-            contents = ''
-            contents += (
-                f'[{pn}]({base_url}/p/{pn})\n'
-            )
-            for spec, value in ret_specs.items():
-                spacing = max([len(k) for k in ret_specs.keys()])
-                if spec == 'num_specs':
-                    contents += f'`{spec:>{spacing}}:`\n'
-                    spacing = max([len(k) for k in ret_specs['num_specs'].keys()])
-                    for num_spec, tup in ret_specs['num_specs'].items():
-                        val, unit = tup
-                        contents += f'`{num_spec:>{spacing}}  {val} {unit}`\n'
-                else:
-                    contents += f'`{spec:>{spacing}}  {value}`\n'
-
+        if res:
+            info, ret_specs = res
+            if info and ret_specs:
+                embed = discord.Embed(
+                    title=f'Specs for {info["name"]}',
+                    description=lelnovo.format_specs(db, info, ret_specs)
+                )
+        else:
             embed = discord.Embed(
-                title=f'Specs for {name}',
-                description=contents,
+                title=f'Specs for \'{part_num}\' not found',
+                description=f'Check that the part number is valid. Discontinued products are not in database.',
             )
-            embed.set_footer(text = lelnovo.get_status(db))
-            await context.send(embed=embed)
+
+        embed.set_footer(text = lelnovo.get_status(db))
+        await context.send(embed=embed)
 
 @bot.command(name='search',
     brief=lelnovo.command_briefs['search'],
@@ -138,11 +128,11 @@ async def cmd_search(context, *args):
         results = lelnovo.search(args, db)
         for result in results:
             contents = ''
-            prod = result[0]
-            pn   = result[1]['part number']
+            prod  = result[0]
+            pn    = result[1]['part number']
+            price = result[1]['num_specs']['price']
             contents += (
-                #f'[{prod}]({base_url}/p/{prod}) **->** [{pn}]({base_url}/p/{pn})\n'
-                f'[{pn}]({base_url}/p/{pn})\n'
+                f'[{pn}]({db["metadata"]["base url"]}/p/{pn}) --- **{price[1]}{price[0]}**\n'
             )
             for match in result[2]:
                 contents += f'`{match[0]:12} {match[1]}`\n'
