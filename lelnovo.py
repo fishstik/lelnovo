@@ -39,23 +39,26 @@ def search(query, db):
     qs = []
     for term in query.split(','):
         term = term.strip()
-        if m := re.match(r'(.*):(.*)', term): # spec:'string' search
+        m = re.match(r'(.*):(.*)', term) # spec:'string' search
+        if m:
             spec   = m.group(1).strip()
             search = m.group(2).strip()
             if str(spec).lower() in [k.lower() for k in db['keys']['info']] + ['product']:
                 qs.append(('spec', spec, search))
             else:
                 print(f'Unhandled spec \'{spec}\' in \'{term}\'')
-        elif m := re.match(r'\s?([\w ]+)([=<>]+)\s?(.*)', term): # num_spec comparison search
-            spec =   m.group(1).strip()
-            op_str = m.group(2).strip()
-            num    = m.group(3).strip()
-            if spec in db['keys']['num_specs'] and op_str in ops:
-                qs.append(('num_spec', spec, ops[op_str], num))
-            else:
-                print(f'Unhandled num_spec \'{spec}\' or num_spec operator \'{m.group(2)}\' in \'{term}\'')
-        else: # generic value search
-            qs.append(('search', term))
+        else:
+            m = re.match(r'\s?([\w ]+)([=<>]+)\s?(.*)', term) # num_spec comparison search
+            if m:
+                spec =   m.group(1).strip()
+                op_str = m.group(2).strip()
+                num    = m.group(3).strip()
+                if spec in db['keys']['num_specs'] and op_str in ops:
+                    qs.append(('num_spec', spec, ops[op_str], num))
+                else:
+                    print(f'Unhandled num_spec \'{spec}\' or num_spec operator \'{m.group(2)}\' in \'{term}\'')
+            else: # generic value search
+                qs.append(('search', term))
     #pprint(qs)
 
     results = []
