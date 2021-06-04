@@ -205,9 +205,9 @@ def get_api_specs(session, pn):
     return specs, num_specs
 
 def process_brand(s, brand, print_progress=False):
+    # returns dict with part numbers as key
     prods = {}
-
-    # keep track of all keys encountered in this brand
+    # keep track of and return all keys encountered in this brand
     keys = {
         'info': [],
         #'api_specs': [], # merged into 'info'
@@ -363,6 +363,7 @@ db['keys'] = {
 #for brand in brands:
 #    db[brand] = process_brand(s, brand, True)
 with multiprocessing.Pool(4) as p:
+    # returns a list of tuple(brand dicts, keys)
     res = p.starmap(process_brand, zip(repeat(s), brands))
     p.terminate()
     p.join()
@@ -377,6 +378,14 @@ db['keys']['info'].remove('num_specs')
 
 db['data'] = dict(zip(brands, [r[0] for r in res]))
 db['metadata']['timestamp'] = time.time()
+
+# count and store total
+total = 0
+for r in res:
+    brand = r[0]
+    for prod, parts in brand.items():
+        total += len(parts)
+db['metadata']['total'] = total
 
 print()
 for brand, prods in db['data'].items():
