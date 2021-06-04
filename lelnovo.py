@@ -26,6 +26,7 @@ def pretty_duration(time_diff_secs):
     return '{} {}'.format(shown_num, unit + ('' if shown_num == 1 else 's'))
 
 def search(query, db):
+    error = False
     ops = {
         '<':  operator.lt,
         '<=': operator.le,
@@ -46,7 +47,7 @@ def search(query, db):
             if str(spec).lower() in [k.lower() for k in db['keys']['info']] + ['product']:
                 qs.append(('spec', spec, search))
             else:
-                print(f'Unhandled spec \'{spec}\' in \'{term}\'')
+                print(f'Ignoring unhandled spec \'{spec}\' in \'{term}\'')
         else:
             m = re.match(r'\s?([\w ]+)([=<>]+)\s?(.*)', term) # num_spec comparison search
             if m:
@@ -56,55 +57,56 @@ def search(query, db):
                 if spec in db['keys']['num_specs'] and op_str in ops:
                     qs.append(('num_spec', spec, ops[op_str], num))
                 else:
-                    print(f'Unhandled num_spec \'{spec}\' or num_spec operator \'{m.group(2)}\' in \'{term}\'')
+                    print(f'Ignoring unhandled num_spec \'{spec}\' or num_spec operator \'{m.group(2)}\' in \'{term}\'')
             else: # generic value search
                 qs.append(('search', term))
     #pprint(qs)
-
     results = []
-    for brand, prods in db['data'].items():
-        for prod, parts in prods.items():
-            for part in parts:
-                matches = []
-                qs_matched = [False]*len(qs)
-                search_matched = False
-                for i in range(len(qs)):
-                    q = qs[i]
-                    if q[0] == 'search':
-                        term = q[1]
-                        # product line search
-                        if term.lower() in prod.lower():
-                            matches.append(('product line', prod))
-                            qs_matched[i] = True
-                        # generic search
-                        for k, v in part.items():
-                            if type(v) == str and term.lower() in v.lower():
-                                matches.append((k, v))
-                                qs_matched[i] = True
-                    elif q[0] == 'spec':
-                        spec = q[1]
-                        term = q[2]
-                        # product line search
-                        if spec == 'product':
+    if qs:
+        for brand, prods in db['data'].items():
+            for prod, parts in prods.items():
+                for part in parts:
+                    matches = []
+                    qs_matched = [False]*len(qs)
+                    search_matched = False
+                    for i in range(len(qs)):
+                        q = qs[i]
+                        if q[0] == 'search':
+                            term = q[1]
+                            # product line search
                             if term.lower() in prod.lower():
                                 matches.append(('product line', prod))
                                 qs_matched[i] = True
-                        # spec search
-                        else:
-                            if term.lower() in part[spec].lower():
-                                matches.append((spec, part[spec]))
+                            # generic search
+                            for k, v in part.items():
+                                if type(v) == str and term.lower() in v.lower():
+                                    matches.append((k, v))
+                                    qs_matched[i] = True
+                        elif q[0] == 'spec':
+                            spec = q[1]
+                            term = q[2]
+                            # product line search
+                            if spec == 'product':
+                                if term.lower() in prod.lower():
+                                    matches.append(('product line', prod))
+                                    qs_matched[i] = True
+                            # spec search
+                            else:
+                                if term.lower() in part[spec].lower():
+                                    matches.append((spec, part[spec]))
+                                    qs_matched[i] = True
+                        elif q[0] == 'num_spec':
+                            num_spec = q[1]
+                            op       = q[2]
+                            num      = q[3]
+                            if num_spec in part['num_specs'] and op(part['num_specs'][num_spec][0], float(num)):
+                                matches.append((num_spec, f'{part["num_specs"][num_spec][0]} {part["num_specs"][num_spec][1]}'))
                                 qs_matched[i] = True
-                    elif q[0] == 'num_spec':
-                        num_spec = q[1]
-                        op       = q[2]
-                        num      = q[3]
-                        if num_spec in part['num_specs'] and op(part['num_specs'][num_spec][0], float(num)):
-                            matches.append((num_spec, f'{part["num_specs"][num_spec][0]} {part["num_specs"][num_spec][1]}'))
-                            qs_matched[i] = True
-                if qs_matched.count(True) == len(qs):
-                    results.append((prod, part, matches))
+                    if qs_matched.count(True) == len(qs):
+                        results.append((prod, part, matches))
+    else: error = True
 
-    return results
+    return results, error
 
 def get_specs(part_num, db, specs=[]):
     ret_specs = {}
@@ -146,15 +148,20 @@ def format_specs(db, info, specs):
     return contents
 
 def get_status(db):
-    total = 0
+    string = ''
+    string += f'**{db["metadata"]["total"]}** products total across **{len(db["data"].keys())}** product lines\n'
+    return string
 
+def get_footer(db):
+    total = 0
     dt = datetime.utcfromtimestamp(db['metadata']['timestamp'])
-    return (
+    string = (
         '_'*30 + '\n'
         f'{db["metadata"]["base url"]}\n'
-        f'passcode: {db["metadata"]["passcode"]}\n'
-        f'last update: {dt.strftime("%c")} UTC ({pretty_duration((datetime.utcnow() - dt).total_seconds())} ago)'
     )
+    if 'passcode' in db['metadata']: string += f'passcode: {db["metadata"]["passcode"]}\n'
+    string += f'last update: {dt.strftime("%c")} UTC ({pretty_duration((datetime.utcnow() - dt).total_seconds())} ago)'
+    return string
 
 def get_db(filename):
     with open('db.json', 'r') as f:
@@ -235,6 +242,7 @@ if __name__ == '__main__':
                 print('  '+' '.join([f'{spec:30}' for spec in specs[i:i+3]]))
         elif command == 'status':
             print(get_status(db))
+            print(get_footer(db))
         elif command == 'help':
             print(usage_str)
         else:
@@ -242,10 +250,14 @@ if __name__ == '__main__':
     else:
         command, rest = words[0], ' '.join(words[1:])
         if command == 'search':
-            for res in search(rest, db):
-                print(f'{res[0]} -> {res[1]["part number"]} | {res[1]["name"]}')
-                for match in res[2]:
-                    print(f'  {match[0]:12} {match[1]}')
+            res, error = search(rest, db)
+            if error:
+                print(f'Invalid query \'{rest}\'')
+            else:
+                for re in res:
+                    print(f'{res[0]} -> {res[1]["part number"]} | {res[1]["name"]}')
+                    for match in res[2]:
+                        print(f'  {match[0]:12} {match[1]}')
         elif command == 'specs':
             specs = []
             words = re.split('\s+', rest, 1)

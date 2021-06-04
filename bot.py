@@ -21,7 +21,7 @@ class FileHandler(FileSystemEventHandler):
                 try:
                     db = lelnovo.get_db('db.json')
                     print('database updated:')
-                    print(lelnovo.get_status(db))
+                    print(lelnovo.get_footer(db))
                     break
                 except json.decoder.JSONDecodeError:
                     print(f'JSON load error. Retrying ({i}/5)...')
@@ -35,7 +35,7 @@ TOKEN = CFG['discord']['token']
 bot = discord.ext.commands.Bot(command_prefix=BOT_PREFIX)
 
 db = lelnovo.get_db('db.json')
-print(lelnovo.get_status(db))
+print(lelnovo.get_footer(db))
 
 file_handler = FileHandler()
 observer = Observer()
@@ -53,8 +53,9 @@ async def on_ready():
 async def cmd_status(context):
     embed = discord.Embed(
         title='Database Status',
+        description=lelnovo.get_status(db),
     )
-    embed.set_footer(text = lelnovo.get_status(db))
+    embed.set_footer(text = lelnovo.get_footer(db))
     await context.send(embed=embed)
 
 @bot.command(name='listspecs',
@@ -111,7 +112,7 @@ async def cmd_specs(context, *args):
                 description=f'Check that the part number is valid. Discontinued products are not in database.',
             )
 
-        embed.set_footer(text = lelnovo.get_status(db))
+        embed.set_footer(text = lelnovo.get_footer(db))
         await context.send(embed=embed)
 
 @bot.command(name='search',
@@ -121,37 +122,43 @@ async def cmd_specs(context, *args):
 async def cmd_search(context, *args):
     args = ' '.join(args)
     if args:
-        embed = discord.Embed(
-            title = f'Search Results for \'{args}\''
-        )
         count = 0
-        results = lelnovo.search(args, db)
-        for result in results:
-            contents = ''
-            prod  = result[0]
-            pn    = result[1]['part number']
-            price = result[1]['num_specs']['price']
-            contents += (
-                f'[{pn}]({db["metadata"]["base url"]}/p/{pn}) --- **{price[1]}{price[0]}**\n'
+        results, error = lelnovo.search(args, db)
+        if error:
+            embed = discord.Embed(
+                title = f'Search Failed',
+                description = f'Invalid query `{args}` (check commas!)',
             )
-            for match in result[2]:
-                contents += f'`{match[0]:12} {match[1]}`\n'
-            embed.add_field(
-                name = result[1]['name'],
-                value = contents,
-                inline = False,
+        else:
+            embed = discord.Embed(
+                title = f'Search Results for \'{args}\'',
             )
-            count += 1
-            if count == 10:
-                break
+            for result in results:
+                contents = ''
+                prod  = result[0]
+                pn    = result[1]['part number']
+                price = result[1]['num_specs']['price']
+                contents += (
+                    f'[{pn}]({db["metadata"]["base url"]}/p/{pn}) --- **{price[1]}{price[0]}**\n'
+                )
+                for match in result[2]:
+                    contents += f'`{match[0]:12} {match[1]}`\n'
+                embed.add_field(
+                    name = result[1]['name'],
+                    value = contents,
+                    inline = False,
+                )
+                count += 1
+                if count == 10:
+                    break
 
-        summary = f'Found **{len(results)}** results for `{args}`'
-        if len(results) > 10: summary += ' (only showing first 10)'
-        embed.add_field(
-            name = '\u200b',
-            value = summary,
-        )
-        embed.set_footer(text = lelnovo.get_status(db))
+            summary = f'Found **{len(results)}** results for `{args}`'
+            if len(results) > 10: summary += ' (only showing first 10)'
+            embed.add_field(
+                name = '\u200b',
+                value = summary,
+            )
+        embed.set_footer(text = lelnovo.get_footer(db))
         await context.send(embed=embed)
 
 if __name__ == '__main__':
