@@ -30,13 +30,13 @@ class FileHandler(FileSystemEventHandler):
                     print(lelnovo.get_footer(db))
                     break
                 except json.decoder.JSONDecodeError:
-                    print(f'JSON load error. Retrying ({i}/5)...')
+                    print(f'JSON load error. Retrying ({i+1}/5)...')
                     time.sleep(1)
 
 CFG_FILENAME = 'config.ini'
-DB_FILENAME = 'db.json'
+DB_FILENAME  = 'db.json'
+BOT_PREFIX   = ('!lelnovo ')
 
-BOT_PREFIX = ('!lelnovo ')
 bot = discord.ext.commands.Bot(command_prefix=BOT_PREFIX)
 
 db = {}
@@ -147,11 +147,13 @@ async def cmd_search(context, *args):
                 prod  = result[0]
                 pn    = result[1]['part number']
                 price = result[1]['num_specs']['price']
+                spec_matches = result[2]
                 contents += (
                     f'[{pn}]({db["metadata"]["base url"]}/p/{pn}) --- **{price[1]}{price[0]}**\n'
                 )
+                spacing = max([len(k[0]) for k in spec_matches])
                 for match in result[2]:
-                    contents += f'`{match[0]:12} {match[1]}`\n'
+                    contents += f'`{match[0]:{spacing}}  {match[1]}`\n'
                 embed.add_field(
                     name = result[1]['name'],
                     value = contents,

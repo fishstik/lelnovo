@@ -18,9 +18,11 @@ def try_request(s, url, wait_s=1):
         if r.status_code == 200:
             return r
         else:
-            print(f'request {url} failed with {r.status_code}. Waiting {wait_s}s ...')
-            time.sleep(wait_s)
-            wait_s *= 2
+            #print(f'request {url} failed with {r.status_code}. Waiting {wait_s}s ...')
+            #time.sleep(wait_s)
+            #wait_s *= 2
+            print(f'request {url} failed with {r.status_code} Exiting...')
+            sys.exit()
 
 def get_info(prod, button):
     info = {}
@@ -48,17 +50,17 @@ def get_info(prod, button):
     name = name.replace('\n', '')
     info['name'] = name
 
-    price = prod.select_one('dd.saleprice.pricingSummary-details-final-price, span.bundleDetail_youBundlePrice_value')
-    price = price.text.strip()
-    for ch in ['$', ',']:
-        if ch in price: price = price.replace(ch, '')
-    info['price'] = float(price)
+    #price = prod.select_one('dd.saleprice.pricingSummary-details-final-price, span.bundleDetail_youBundlePrice_value')
+    #price = price.text.strip()
+    #for ch in ['$', ',']:
+    #    if ch in price: price = price.replace(ch, '')
+    #info['price'] = NumSpec(float(price), '$')
 
     if button.has_attr('disabled'): info['status'] = 'Unavailable'
     else:                           info['status'] = button.text.strip()
 
-    coupon = prod.find('span', {'class': 'pricingSummary-couponCode'})
-    if coupon: info['coupon'] = coupon.text.strip()
+    #coupon = prod.find('span', {'class': 'pricingSummary-couponCode'})
+    #if coupon: info['coupon'] = coupon.text.strip()
 
     shipping = prod.find('div', {'class': 'rci-esm'})
     info['shipping'] = shipping.text.strip() if shipping else ''
@@ -145,7 +147,7 @@ def get_api_specs(session, pn):
         'type_attr1',
         'usage_attr1',
     ]
-    r = session.get(f'{base_url}/p/{pn}/specs/json')
+    r = try_request(session, f'{BASE_URL}/p/{pn}/specs/json')
     d = json.loads(r.text)
 
     all_specs = []
@@ -185,15 +187,15 @@ def get_api_specs(session, pn):
 
     # calculate numeric specs
     # pixel density
-    if (    'display horizontal res' in num_specs
-        and 'display vertical res'   in num_specs
+    if (    'display res horizontal' in num_specs
+        and 'display res vertical'   in num_specs
         and 'display size'           in num_specs
     ):
         num_specs['pixel density'] = (
             int(round((
                 math.sqrt(
-                    num_specs['display horizontal res'].value**2
-                    + num_specs['display vertical res'].value**2
+                    num_specs['display res horizontal'].value**2
+                    + num_specs['display res vertical'].value**2
                 ) / num_specs['display size'].value
             ))),
             'ppi'
@@ -218,29 +220,29 @@ def process_brand(s, brand, print_progress=False):
     if print_progress: print(brand, end='\r')
 
     if brand == 'yoga':
-        r = try_request(s, f'{base_url}/yoga/products')
+        r = try_request(s, f'{BASE_URL}/yoga/products')
         pcodes = []
         soup = BeautifulSoup(r.content, 'html.parser')
         for yoga in soup.select('section.yoga-list-convertibles'):
             pcodes.extend([p['data-article-test'] for p in yoga.select('*[data-article-test]')])
     else:
-        r = try_request(s, f'{base_url}/c/{brand}')
+        r = try_request(s, f'{BASE_URL}/c/{brand}')
         soup = BeautifulSoup(r.content, 'html.parser')
-        pcodes = soup.find('meta', {'name': 'subseriesPHimpressions'})['content'].split(',')
+        pcodes = soup.select_one('meta[name="subseriesPHimpressions"], meta[name="bundleIDimpressions"]')['content'].split(',')
 
-    for pn in pcodes:
+    for pn in set(pcodes):
         prods[pn] = []
 
     print(f'{brand} ({len(prods)}) {time.time()-start:.1f}s')
 
     prod_count = 0
     cur_str = ''
-    for k, parts in prods.items():
-        cur_str = f'{brand:22} ({prod_count+1:<2}/{len(prods):2}) {k}'
+    for prod, parts in prods.items():
+        cur_str = f'{brand:22} ({prod_count+1:<2}/{len(prods):2}) {prod}'
         if print_progress: print(cur_str, end='\r')
         start = time.time()
 
-        r = try_request(s, f'{base_url}/p/{k}')
+        r = try_request(s, f'{BASE_URL}/p/{prod}')
         soup = BeautifulSoup(r.content, 'html.parser')
 
         cur_str += f' {time.time()-start:.1f}s'
@@ -261,9 +263,16 @@ def process_brand(s, brand, print_progress=False):
                 # store num_specs as own entry
                 info['num_specs'] = num_specs
 
-                # move price to num_specs
-                info['num_specs']['price'] = NumSpec(info['price'], '$')
-                del info['price']
+                # get price info from api call
+                r = try_request(s, f'{BASE_URL}/p/{pn}/singlev2/price/json')
+                if r:
+                    d = json.loads(r.text)
+                    currency = d['currencySymbol']
+                    if d['eCoupon']: info['coupon'] = d['eCoupon']
+                    price_str = d['startingAtPrice']
+                    for ch in [currency, ',']:
+                        if ch in price_str: price_str = price_str.replace(ch, '')
+                    info['num_specs']['price'] = NumSpec(float(price_str), currency)
 
                 # collect and merge keys
                 keys['info'] = list(set(keys['info'] + list(info.keys()))) 
@@ -277,59 +286,63 @@ def process_brand(s, brand, print_progress=False):
         print(f'{cur_str:46} {"#"*part_count}{part_count} {time.time()-start:.1f}s')
         prod_count += 1
 
+    # clean up any empty prods e.g. from url redirect
+    #new_prods = {}
+    #for prod, parts in prods.items():
+    #    print(parts)
+    #    if parts: new_prods[prod] = parts
+
     return prods, keys
 
 NumSpec = namedtuple('NumSpec', ['value', 'unit'])
 
-base_url = 'https://www.lenovo.com/us/en/ticketsatwork'
-passcode = 'TICKETSatWK'
+BASE_URL = 'https://www.lenovo.com/us/en/ticketsatwork'
+DB_FILENAME = 'db.json'
 
-# authenticate with ticketsatwork
 s = requests.Session()
 s.headers.update({'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36'})
-payload = {
-    'gatekeeperType': 'PasscodeGatekeeper',
-    'passcode': passcode
-    #'CSRFToken': csrf,
-}
-url = f"{base_url}/gatekeeper/authGatekeeper"
-r = s.post(
-    url,
-    data=payload,
-)
-
 # https://www.lenovo.com/us/en/ticketsatwork/p/20XW003EUS/specs/json
 # https://www.lenovo.com/us/en/ticketsatwork/p/20XW003EUS/singlev2/price/json
 
 #db = {
-#    'metadata': {
-#    },
+#    'metadata': {},
+#    'keys': {},
 #    'data': {
 #        'thinkpadx1': {
 #            '22TP2X1X1C9': [
 #                {
-#                    'part':     str,
-#                    'title':    str,
-#                    'price':    int,
-#                    'shipping': str,
-#                    'status':   str,
-#                    'specs': {
-#                        str: str,
+#                    'spec':     val,
+#                    'num_specs': {
+#                        'num_spec': (num, 'unit'),
 #                    },
 #                },
-#                ...
-#            ]
-#        }
+#            ],
+#        },
 #    }
 #}
 db = {
     'metadata': {
-        'base url': base_url,
-        'passcode': passcode,
+        'base url': BASE_URL,
     },
     'keys': {},
     'data': {}
 }
+
+if 'ticketsatwork' in BASE_URL:
+    passcode = 'TICKETSatWK'
+    db['metadata']['passcode'] = passcode
+    # authenticate with ticketsatwork
+    payload = {
+        'gatekeeperType': 'PasscodeGatekeeper',
+        'passcode': passcode
+        #'CSRFToken': csrf,
+    }
+    url = f"{BASE_URL}/gatekeeper/authGatekeeper"
+    r = s.post(
+        url,
+        data=payload,
+    )
+
 brands = [
     'thinkpadx1',
     'thinkpadp',
@@ -360,28 +373,30 @@ db['keys'] = {
     'num_specs': [],
 }
 
+# return a list of tuple(brand dicts, keys)
+results = []
 #for brand in brands:
-#    db[brand] = process_brand(s, brand, True)
+#    result, keys = process_brand(s, brand, True)
+#    results.append((result, keys))
 with multiprocessing.Pool(4) as p:
-    # returns a list of tuple(brand dicts, keys)
-    res = p.starmap(process_brand, zip(repeat(s), brands))
+    results = p.starmap(process_brand, zip(repeat(s), brands))
     p.terminate()
     p.join()
 
 # merge keys
-for r in res:
+for r in results:
     db['keys']['info'] = list(set(db['keys']['info'] + r[1]['info']))
     #db['keys']['api_specs'] = list(set(db['keys']['api_specs'] + r[1]['api_specs']))
     db['keys']['num_specs'] = list(set(db['keys']['num_specs'] + r[1]['num_specs']))
 # remove num_specs key from info
 db['keys']['info'].remove('num_specs')
 
-db['data'] = dict(zip(brands, [r[0] for r in res]))
+db['data'] = dict(zip(brands, [r[0] for r in results]))
 db['metadata']['timestamp'] = time.time()
 
 # count and store total
 total = 0
-for r in res:
+for r in results:
     brand = r[0]
     for prod, parts in brand.items():
         total += len(parts)
@@ -412,5 +427,5 @@ print('metadata')
 for k, v in db['metadata'].items():
     print(f'  {k:10} {v}')
 
-with open('db.json', 'w') as f:
+with open(DB_FILENAME, 'w') as f:
     json.dump(db, f)

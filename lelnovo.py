@@ -164,7 +164,7 @@ def get_footer(db):
     return string
 
 def get_db(filename):
-    with open('db.json', 'r') as f:
+    with open(filename, 'r') as f:
         js = f.read()
         return json.loads(js)
 
@@ -255,9 +255,15 @@ if __name__ == '__main__':
                 print(f'Invalid query \'{rest}\'')
             else:
                 for re in res:
-                    print(f'{res[0]} -> {res[1]["part number"]} | {res[1]["name"]}')
-                    for match in res[2]:
-                        print(f'  {match[0]:12} {match[1]}')
+                    prod  = re[0]
+                    pn    = re[1]['part number']
+                    price = re[1]['num_specs']['price']
+                    spec_matches = re[2]
+                    print(f'{pn} -- {price[1]}{price[0]}')
+                    spacing = max([len(k[0]) for k in spec_matches])
+                    for match in spec_matches:
+                        print(f'  {match[0]:{spacing}}  {match[1]}')
+            print(f'Found {len(res)} results for \'{rest}\'')
         elif command == 'specs':
             specs = []
             words = re.split('\s+', rest, 1)
