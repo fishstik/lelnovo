@@ -131,7 +131,7 @@ def get_specs(part_num, db, specs=[]):
 def format_specs(db, info, specs):
     contents = ''
     contents += (
-        f'[{info["part number"]}]({db["metadata"]["base url"]}/p/{info["part number"]})'
+        f'{info["part number"]} ([link]({db["metadata"]["base url"]}/p/{info["part number"]}))'
         f' --- **{info["price"][1]}{info["price"][0]}**\n'
     )
     for spec, value in specs.items():

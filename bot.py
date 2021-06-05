@@ -149,7 +149,7 @@ async def cmd_search(context, *args):
                 price = result[1]['num_specs']['price']
                 spec_matches = result[2]
                 contents += (
-                    f'[{pn}]({db["metadata"]["base url"]}/p/{pn}) --- **{price[1]}{price[0]}**\n'
+                    f'{pn} ([link]({db["metadata"]["base url"]}/p/{pn})) --- **{price[1]}{price[0]}**\n'
                 )
                 spacing = max([len(k[0]) for k in spec_matches])
                 for match in result[2]:
