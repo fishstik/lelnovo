@@ -113,7 +113,7 @@ async def cmd_specs(context, *args):
             if info and ret_specs:
                 embed = discord.Embed(
                     title=f'Specs for {info["name"]}',
-                    description=lelnovo.format_specs(db, info, ret_specs)
+                    description=lelnovo.format_specs(db, info, ret_specs)[:2048]
                 )
         else:
             embed = discord.Embed(
@@ -143,17 +143,25 @@ async def cmd_search(context, *args):
                 title = f'Search Results for \'{args}\'',
             )
             for result in results:
-                contents = ''
-                prod  = result[0]
-                pn    = result[1]['part number']
-                price = result[1]['num_specs']['price']
+                prod   = result[0]
+                pn     = result[1]['part number']
+                price  = result[1]['num_specs']['price']
+                status = result[1]['status']
                 spec_matches = result[2]
-                contents += (
-                    f'{pn} ([link]({db["metadata"]["base url"]}/p/{pn})) --- **{price[1]}{price[0]}**\n'
-                )
+
+                contents = f'{pn} ([link]({db["metadata"]["base url"]}/p/{pn}))'
+
+                price_str = f'{price[1]}{price[0]:.2f}'
+                if status.lower() == 'unavailable':
+                    contents += f' **~~{price_str}~~ (unavailable)**\n'
+                elif status.lower() == 'customize':
+                    contents += f' **{price_str} (customize)**\n'
+                else:
+                    contents += f' **{price_str}**\n'
+
                 spacing = max([len(k[0]) for k in spec_matches])
                 for match in result[2]:
-                    contents += f'`{match[0]:{spacing}}  {match[1]}`\n'
+                    contents += lelnovo.multiline(f'{match[0]:{spacing}}  {match[1]}', indent=spacing+2) + '\n'
                 embed.add_field(
                     name = result[1]['name'],
                     value = contents,

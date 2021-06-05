@@ -258,11 +258,6 @@ def process_brand(s, brand, print_progress=False):
                 #info['api_specs'], info['num_specs'] = get_api_specs(s, pn)
                 api_specs, num_specs = get_api_specs(s, pn)
 
-                # merge api specs with info
-                info.update(api_specs)
-                # store num_specs as own entry
-                info['num_specs'] = num_specs
-
                 # get price info from api call
                 r = try_request(s, f'{BASE_URL}/p/{pn}/singlev2/price/json')
                 if r:
@@ -272,7 +267,12 @@ def process_brand(s, brand, print_progress=False):
                     price_str = d['startingAtPrice']
                     for ch in [currency, ',']:
                         if ch in price_str: price_str = price_str.replace(ch, '')
-                    info['num_specs']['price'] = NumSpec(float(price_str), currency)
+                    num_specs['price'] = NumSpec(float(price_str), currency)
+
+                # merge api specs with info
+                info.update(api_specs)
+                # store num_specs as own entry
+                info['num_specs'] = num_specs
 
                 # collect and merge keys
                 keys['info'] = list(set(keys['info'] + list(info.keys()))) 
@@ -405,8 +405,8 @@ db['metadata']['total'] = total
 print()
 for brand, prods in db['data'].items():
     print(f'{brand} ({len(prods)})')
-    for prod, parts in prods.items():
-        print(f'  {prod} ({len(parts)})')
+    #for prod, parts in prods.items():
+    #    print(f'  {prod} ({len(parts)})')
         #for part in parts:
         #    first = True
         #    for name, val in part.items():

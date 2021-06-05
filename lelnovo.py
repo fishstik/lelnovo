@@ -5,6 +5,7 @@ import sys
 import re
 import operator
 import math
+import textwrap
 from datetime import datetime,timezone,timedelta
 from pprint import pprint
 
@@ -118,6 +119,7 @@ def get_specs(part_num, db, specs=[]):
                     info['name'] = part['name']
                     info['part number'] = part['part number']
                     info['price'] = part['num_specs']['price']
+                    info['status'] = part['status']
                     if not specs:
                         ret_specs = part
                     else:
@@ -128,22 +130,47 @@ def get_specs(part_num, db, specs=[]):
                                 ret_specs[spec] = f'{part["num_specs"][spec][0]} {part["num_specs"][spec][1]}'
                     return info, ret_specs
 
+def multiline(line, indent, max_width=73):
+    wrapper = textwrap.TextWrapper(
+        width             = max_width,
+        subsequent_indent = ' '*indent,
+    )
+    return '\n'.join([f'`{l}`' for l in wrapper.fill(line).split('\n')])
+
 def format_specs(db, info, specs):
     contents = ''
-    contents += (
-        f'{info["part number"]} ([link]({db["metadata"]["base url"]}/p/{info["part number"]}))'
-        f' --- **{info["price"][1]}{info["price"][0]}**\n'
-    )
+    contents += f'{info["part number"]} ([link]({db["metadata"]["base url"]}/p/{info["part number"]}))'
+
+    price_str = f'{info["price"][1]}{info["price"][0]:.2f}'
+    if info['status'].lower() == 'unavailable':
+        contents += f' **~~{price_str}~~ (unavailable)**\n'
+    elif info['status'].lower() == 'customize':
+        contents += f' **{price_str} (customize)**\n'
+    else:
+        contents += f' **{price_str}**\n'
+
+    num_specs = {}
     for spec, value in specs.items():
         spacing = max([len(k) for k in specs.keys()])
-        if spec == 'num_specs':
-            contents += f'`{spec:>{spacing}}:`\n'
-            spacing = max([len(k) for k in specs['num_specs'].keys()])
-            for num_spec, tup in specs['num_specs'].items():
+        if spec == 'num_specs': # save num_specs sub-dict for later
+            num_specs = specs[spec]
+        else: # add regular specs
+            line = f'{spec:>{spacing}}  {value}'
+            contents += f'{multiline(line, indent=spacing+2)}\n'
+
+        # format num_specs sub-dict
+        if num_specs:
+            num_spec_contents = f'`{"num_specs":>{spacing}}:`\n'
+            num_spec_spacing = max([len(k) for k in num_specs.keys()])
+            for num_spec, tup in num_specs.items():
                 val, unit = tup
-                contents += f'`{num_spec:>{spacing}}  {val} {unit}`\n'
-        else:
-            contents += f'`{spec:>{spacing}}  {value}`\n'
+                line = f'{num_spec:>{num_spec_spacing}}  {val} {unit}'
+                num_spec_contents += f'{multiline(line, indent=num_spec_spacing+2)}\n'
+            # only add num_specs if doesnt exceed length limit
+            if len(contents+num_spec_contents) < 2048:
+                contents += num_spec_contents
+            else:
+                contents += f'`{"num_specs":>{spacing}}  [omitted due to length]`\n'
 
     return contents
 
