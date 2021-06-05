@@ -36,6 +36,7 @@ class FileHandler(FileSystemEventHandler):
 CFG_FILENAME = 'config.ini'
 DB_FILENAME  = 'db.json'
 BOT_PREFIX   = ('!lelnovo ')
+EMBED_COLOR  = 0xe41c1c
 
 bot = discord.ext.commands.Bot(command_prefix=BOT_PREFIX)
 
@@ -63,6 +64,7 @@ async def cmd_status(context):
     embed = discord.Embed(
         title='Database Status',
         description=lelnovo.get_status(db),
+        color=EMBED_COLOR,
     )
     embed.set_footer(text = lelnovo.get_footer(db))
     await context.send(embed=embed)
@@ -74,7 +76,8 @@ async def cmd_status(context):
 async def cmd_listspecs(context):
     embed = discord.Embed(
         title='Specs List',
-        description='All specs that can be used in `search` and `specs` commands\n'
+        description='All specs that can be used in `search` and `specs` commands\n',
+        color=EMBED_COLOR,
     )
     contents = ''
     specs = sorted(db['keys']['info'])
@@ -113,12 +116,14 @@ async def cmd_specs(context, *args):
             if info and ret_specs:
                 embed = discord.Embed(
                     title=f'Specs for {info["name"]}',
-                    description=lelnovo.format_specs(db, info, ret_specs)[:2048]
+                    description=lelnovo.format_specs(db, info, ret_specs)[:2048],
+                    color=EMBED_COLOR,
                 )
         else:
             embed = discord.Embed(
                 title=f'Specs for \'{part_num}\' not found',
                 description=f'Check that the part number is valid. Discontinued products are not in database.',
+                color=EMBED_COLOR,
             )
 
         embed.set_footer(text = lelnovo.get_footer(db))
@@ -137,10 +142,12 @@ async def cmd_search(context, *args):
             embed = discord.Embed(
                 title = f'Search Failed',
                 description = f'Invalid query `{args}` (check commas!)',
+                color=EMBED_COLOR,
             )
         else:
             embed = discord.Embed(
                 title = f'Search Results for \'{args}\'',
+                color=EMBED_COLOR,
             )
             for result in results:
                 prod   = result[0]
