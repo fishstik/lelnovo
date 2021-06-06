@@ -346,6 +346,8 @@ db = {
     'data': {}
 }
 
+start = time.time()
+
 if args.region == 'us/en/ticketsatwork':
     passcode = 'TICKETSatWK'
     db['metadata']['passcode'] = passcode
@@ -396,6 +398,11 @@ else:
         p.terminate()
         print('Pool terminated')
         p.join()
+
+# print scrape duration
+duration_s = time.time()-start
+duration_str = f'{int(duration_s/60)}m {int(duration_s%60)}s'
+print(f'Scraped \'{args.region_short}\' in {duration_str}')
 
 # merge keys
 for r in results:
