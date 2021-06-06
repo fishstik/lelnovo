@@ -80,7 +80,8 @@ def search(query, db):
                                 qs_matched[i] = True
                             # generic search
                             for k, v in part.items():
-                                if type(v) == str and term.lower() in v.lower():
+                                # dont search summary
+                                if k != 'summary' and type(v) == str and term.lower() in v.lower():
                                     matches.append((k, v))
                                     qs_matched[i] = True
                         elif q[0] == 'spec':
@@ -170,7 +171,7 @@ def format_specs(db, info, specs):
             if len(contents+num_spec_contents) < 2048:
                 contents += num_spec_contents
             else:
-                contents += f'`{"num_specs":>{spacing}}  [omitted due to length]`\n'
+                contents += f'`{"num_specs":>{spacing}}  [omitted. use \'specs {info["part number"]} num_specs\' to view.]`\n'
 
     return contents
 
