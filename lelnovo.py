@@ -219,57 +219,94 @@ def get_dbs(dir):
                 dbs[db['metadata']['short region']] = db
     return dbs
 
-command_helps = {
-    'listspecs': 'list valid specs and num_specs used in \'search\' and \'specs\' commands',
-    'search': (
-        'search for products with search terms separated by commas. '
-        'use \'listspecs\' to view valid specs.\n'
-        '\n'
-        'possible search terms:\n'
-        '  term          searches for \'term\' in any field\n'
-        '  spec:term     searches for \'term\' in \'spec\'.\n'
-        '  num_spec<num  searches for \'num_spec\' that satisfies the condition \'< num\'.\n'
-        '                valid operators are < <= == != => >\n'
-        '\n'
-        'example:\n'
-        '  "search x1e, price<1400, display:fhd"\n'
-    ),
-    'specs': (
-        'list all specs for a given product number. '
-        'if arguments are given, lists the given comma-separated specs. '
-        'use \'listspecs\' to view valid specs.\n'
-        '\n'
-        'examples:\n'
-        '  "specs 20TK001EUS"\n'
-        '  "specs 20TK001EUS display, price, memory"\n'
-    ),
-    'status':    'display product database status',
-}
 command_briefs= {
-    'listspecs': 'list valid specs and num_specs',
-    'search':    'search for products',
-    'specs':     'list specs for a given product number',
-    'status':    'display product database status',
+    'listregions':   'list all available regions',
+    'status':        'display status for all available databases',
+    'reg_status':    'display region\'s database status',
+    'reg_listspecs': 'list valid specs and num_specs',
+    'reg_search':    'search for products with queries separated by commas',
+    'reg_specs':     'list specs for a given product number',
+}
+command_descrs = {
+    'listregions': (
+        f'usage: !lelnovo listregions\n'
+        f'       !lelnovo lr\n'
+        f'\n'
+        f'{command_briefs["listregions"]}'
+    ),
+    'status': (
+        f'usage: !lelnovo status\n'
+        f'       !lelnovo st\n'
+        f'\n'
+        f'{command_briefs["status"]}'
+        # add reg_status help since it's inaccessible
+        f'\n'
+        f'\n'
+        f'usage: !lelnovo [region] status\n'
+        f'       !lelnovo [region] st\n'
+        f'\n'
+        f'{command_briefs["reg_status"]}'
+    ),
+    'reg_status':  command_briefs['reg_status'], # inaccessible
+    'reg_listspecs': (
+        f'usage: !lelnovo [region] listspecs\n'
+        f'       !lelnovo [region] ls\n'
+        f'\n'
+        f'list valid specs and num_specs for use in \'search\' and \'specs\' commands'
+    ),
+    'reg_search': (
+        f'usage: !lelnovo [region] search query[, query, ...]\n'
+        f'       !lelnovo [region] s      query[, query, ...]\n'
+        f'\n'
+        f'{command_briefs["reg_search"]}\n'
+        f'\n'
+        f'valid queries:\n'
+        f'  term          searches for \'term\' in any field\n'
+        f'  spec:term     searches for \'term\' in \'spec\'\n'
+        f'                use \'listspecs\' region command to view valid specs\n'
+        f'  num_spec<num  searches for \'num_spec\' that satisfies the condition \'< num\'\n'
+        f'                valid operators are <,<=,==,!=,=>,>\n'
+        f'                use \'listspecs\' region command to view valid num_specs.\n'
+        f'\n'
+        f'example:\n'
+        f'  "!lelnovo us search x1e, price<=1400, display:fhd"\n'
+    ),
+    'reg_specs': (
+        f'usage: !lelnovo [region] specs prodnum [spec[, spec, ...]]\n'
+        f'       !lelnovo [region] sp    prodnum [spec[, spec, ...]]\n'
+        f'\n'
+        f'{command_briefs["reg_specs"]}\n',
+        f'if specs are given, filters result by the given comma-separated specs.\n'
+        f'use \'listspecs\' to view valid specs.\n'
+        f'\n'
+        f'examples:\n'
+        f'  "!lelnovo us specs 20TK001EUS"\n'
+        f'  "!lelnovo us specs 20TK001EUS display, price, memory"\n'
+    ),
 }
 usage_str = (
-    f'usage: !lelnovo command [arguments]\n'
+    f'usage: !lelnovo [region] command [parameters, ...]\n'
     f'\n'
-    f'commands:\n'
-    f'  {"listspecs":10} {command_helps["listspecs"]}\n'
-    f'  {"search   ":10} search for product with search terms separated by commas.\n'
-    f'  {"         ":10} valid searches:\n'
-    f'  {"         ":10}   term          searches for \'term\' in any field\n'
-    f'  {"         ":10}   spec:term     searches for \'term\' in \'spec\'. Use \'listspecs\' command to view valid specs.\n'
-    f'  {"         ":10}   num_spec<num  searches for \'num_spec\' that satisfies the condition \'< num\'.\n'
-    f'  {"         ":10}                 valid operators are <,<=,==,!=,=>,>. Use \'listspecs\' command to view valid num_specs.\n'
-    f'  {"specs    ":10} list all specs for a given product number. if arguments are given, lists the given comma-separated specs\n'
-    f'  {"         ":10} use \'listspecs\' command to view valid specs.\n'
-    f'  {"help     ":10} show this help message\n'
+    f'commands without region:\n'
+    f'  {"h|help"        :14}    show this help message\n'
+    f'  {"h|help command":14}    show help for command\n'
+    f'  {"lr|listregions":14}    {command_briefs["listregions"]}\n'
+    f'  {"st|status"     :14}    {command_briefs["status"]}\n'
+    f'\n'
+    f'commands with region:\n'
+    f'  {"st|status"     :14}    {command_briefs["reg_status"]}\n'
+    f'  {"ls|listspecs"  :14}    {command_briefs["reg_listspecs"]}\n'
+    f'  {"s|search query[, query, ...]"}\n'
+    f'  {" "             :14}    {command_briefs["reg_search"]}\n'
+    f'  {"sp|specs prodnum [spec[, spec, ...]]"}\n'
+    f'  {" "             :14}    {command_briefs["reg_specs"]}\n'
     f'\n'
     f'examples:\n'
-    f'  "search x1e, price<1400, display:1080"\n'
-    f'  "specs 20TK001EUS"\n'
-    f'  "specs 20TK001EUS display, price"\n'
+    f'  "!lelnovo listregions"\n'
+    f'  "!lelnovo us status"\n'
+    f'  "!lelnovo us search x1e, price<=1400, display:fhd"\n'
+    f'  "!lelnovo us specs 20TK001EUS"\n'
+    f'  "!lelnovo us specs 20TK001EUS display, price, memory"\n'
 )
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

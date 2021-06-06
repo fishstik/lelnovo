@@ -35,8 +35,22 @@ CFG_FILENAME = 'config.ini'
 DB_DIR       = './dbs'
 BOT_PREFIX   = ('!lelnovo ')
 EMBED_COLOR  = 0xe41c1c
+CMD_ALIASES = {
+    'h': 'help',
+    'lr': 'listregions',
+    'st': 'status',
+}
+REGCMD_ALIASES = {
+    'st': 'status',
+    'ls': 'listspecs',
+    's':  'search',
+    'sp': 'specs',
+}
 
-bot = discord.ext.commands.Bot(command_prefix=BOT_PREFIX)
+bot = discord.ext.commands.Bot(
+    command_prefix=BOT_PREFIX,
+    help_command=None
+)
 
 #dbs = {
 #    short_region : db,
@@ -77,8 +91,6 @@ def parse_command(args, region):
     db = dbs[region]
     region_emoji = lelnovo.get_region_emoji(db['metadata']['short region'])
 
-    # TODO: convert rest of bot.commands, add listregions command
-
     if command in ['status', 'st']:
         embed = discord.Embed(
             title='Database Status',
@@ -109,7 +121,7 @@ def parse_command(args, region):
         embed.add_field(name='number specs', value=contents, inline=False)
 
         embed.set_footer(text = lelnovo.get_footer(db))
-    elif command in ['search', 'se']:
+    elif command in ['search', 's']:
         params = ' '.join(params)
         if params:
             count = 0
@@ -193,10 +205,30 @@ def parse_command(args, region):
 
     return embed
 
+@bot.command(name='help',
+    aliases = ['h'],
+)
+async def cmd_help(context, *args):
+    arg = ' '.join(args)
+    # searching in non-region commands first
+    # so conflicting name in region commands are inaccessible
+    if arg in CMD_ALIASES.values():
+        msg = ''.join(lelnovo.command_descrs[arg])
+    elif arg in CMD_ALIASES.keys():
+        msg = ''.join(lelnovo.command_descrs[CMD_ALIASES[arg]])
+    elif arg in REGCMD_ALIASES.values():
+        msg = ''.join(lelnovo.command_descrs[f'reg_{arg}'])
+    elif arg in REGCMD_ALIASES.keys():
+        msg = ''.join(lelnovo.command_descrs[f'reg_{REGCMD_ALIASES[arg]}'])
+    else:
+        msg = lelnovo.usage_str
+
+    await context.send(f'```\n{msg}```')
+
 @bot.command(name='listregions',
-    aliases=['lr'],
-    brief='list valid regions',
-    description='list valid regions',
+    aliases     = ['lr'],
+    brief       = lelnovo.command_briefs['listregions'],
+    description = lelnovo.command_descrs['listregions'],
 )
 async def cmd_listregions(context):
     contents = ''
