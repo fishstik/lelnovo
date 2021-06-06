@@ -6,6 +6,7 @@ import re
 import operator
 import math
 import textwrap
+import os
 from datetime import datetime,timezone,timedelta
 from pprint import pprint
 
@@ -175,26 +176,48 @@ def format_specs(db, info, specs):
 
     return contents
 
+def get_region_emoji(region_short):
+    emojis = {
+        'us': ':flag_us:',
+        'tck': ':tickets:',
+    }
+    if region_short in emojis: return emojis[region_short]
+    else:                      return None
+
 def get_status(db):
     string = ''
+
+    emoji = get_region_emoji(db['metadata']['short region'])
+    if emoji: string += f' {emoji}'
+    string += f' **{db["metadata"]["region"]}**\n'
+
     string += f'**{db["metadata"]["total"]}** products total across **{len(db["data"].keys())}** product lines\n'
     return string
 
 def get_footer(db):
     total = 0
     dt = datetime.utcfromtimestamp(db['metadata']['timestamp'])
+
     string = (
         '_'*30 + '\n'
         f'{db["metadata"]["base url"]}\n'
     )
+
     if 'passcode' in db['metadata']: string += f'passcode: {db["metadata"]["passcode"]}\n'
+
     string += f'last update: {dt.strftime("%c")} UTC ({pretty_duration((datetime.utcnow() - dt).total_seconds())} ago)'
     return string
 
-def get_db(filename):
-    with open(filename, 'r') as f:
-        js = f.read()
-        return json.loads(js)
+def get_dbs(dir):
+    dbs = {}
+    for filename in os.listdir(dir):
+        if filename.endswith('.json'):
+            with open(f'{dir}/{filename}', 'r') as f:
+                js = f.read()
+                db = json.loads(js)
+                print(f'Loaded \'{dir}/{filename}\'')
+                dbs[db['metadata']['short region']] = db
+    return dbs
 
 command_helps = {
     'listspecs': 'list valid specs and num_specs used in \'search\' and \'specs\' commands',

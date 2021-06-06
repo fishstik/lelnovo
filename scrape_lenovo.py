@@ -1,11 +1,12 @@
+import argparse
 import requests
 import sys
 import re
 import json
 import math
-import datetime
 import time
 import multiprocessing
+import os
 from bs4 import BeautifulSoup
 from itertools import repeat
 from collections import namedtuple
@@ -22,7 +23,7 @@ def try_request(s, url, wait_s=1):
             #time.sleep(wait_s)
             #wait_s *= 2
             print(f'request {url} failed with {r.status_code} Exiting...')
-            sys.exit()
+            sys.exit() #FIXME: terminate mp parent if child is exiting
 
 def get_info(prod, button):
     info = {}
@@ -36,8 +37,8 @@ def get_info(prod, button):
     elif button.has_attr('data-productcode'):
         pn = button['data-productcode']
     if not pn:
-        print(f'ERROR: No part number found for {prod}. Exiting...')
-        sys.exit()
+        print(f'ERROR: No part number found for {prod}. Skipping...')
+        return None
     info['part number'] = pn
 
     bundle = prod.find_all('a', {'class': 'bundleResults-black'})
@@ -256,35 +257,41 @@ def process_brand(s, brand, print_progress=False):
         for prod in soup.select('li.tabbedBrowse-productListing-container, div.tabbedBrowse-module.singleModelView'):
             button = prod.select_one('form[id^="addToCartFormTop"] button[class*="tabbedBrowse-productListing-footer"]')
             if button:
-                pn, info = get_info(prod, button)
+                res = get_info(prod, button)
+                if res:
+                    pn, info = res
 
-                #info['api_specs'], info['num_specs'] = get_api_specs(s, pn)
-                api_specs, num_specs = get_api_specs(s, pn)
+                    #info['api_specs'], info['num_specs'] = get_api_specs(s, pn)
+                    api_specs, num_specs = get_api_specs(s, pn)
 
-                # get price info from api call
-                r = try_request(s, f'{BASE_URL}/p/{pn}/singlev2/price/json')
-                if r:
-                    d = json.loads(r.text)
-                    currency = d['currencySymbol']
-                    if d['eCoupon']: info['coupon'] = d['eCoupon']
-                    price_str = d['startingAtPrice']
-                    for ch in [currency, ',']:
-                        if ch in price_str: price_str = price_str.replace(ch, '')
-                    num_specs['price'] = NumSpec(float(price_str), currency)
+                    # get price info from api call
+                    r = try_request(s, f'{BASE_URL}/p/{pn}/singlev2/price/json')
+                    if r:
+                        d = json.loads(r.text)
+                        currency = d['currencySymbol']
+                        if d['eCoupon']: info['coupon'] = d['eCoupon']
+                        price_str = d['startingAtPrice']
+                        for ch in [currency, ',']:
+                            if ch in price_str: price_str = price_str.replace(ch, '')
+                        num_specs['price'] = NumSpec(float(price_str), currency)
 
-                # merge api specs with info
-                info.update(api_specs)
-                # store num_specs as own entry
-                info['num_specs'] = num_specs
+                    # merge api specs with info
+                    info.update(api_specs)
+                    # store num_specs as own entry
+                    info['num_specs'] = num_specs
 
-                # collect and merge keys
-                keys['info'] = list(set(keys['info'] + list(info.keys()))) 
-                #keys['api_specs'] = list(set(keys['api_specs'] + list(info['api_specs'].keys())))
-                keys['num_specs'] = list(set(keys['num_specs'] + list(info['num_specs'].keys())))
+                    # add weight unit to info-weight from num_spec-weight
+                    if 'weight' in info and 'weight' in info['num_specs']:
+                        info['weight'] += f' {info["num_specs"]["weight"]}'
 
-                parts.append(info)
+                    # collect and merge keys
+                    keys['info'] = list(set(keys['info'] + list(info.keys()))) 
+                    #keys['api_specs'] = list(set(keys['api_specs'] + list(info['api_specs'].keys())))
+                    keys['num_specs'] = list(set(keys['num_specs'] + list(info['num_specs'].keys())))
 
-                part_count += 1
+                    parts.append(info)
+
+                    part_count += 1
                 if print_progress: print(f'{cur_str} {"#"*part_count}{part_count}\r', end='\r')
         print(f'{cur_str:46} {"#"*part_count}{part_count} {time.time()-start:.1f}s')
         prod_count += 1
@@ -297,41 +304,49 @@ def process_brand(s, brand, print_progress=False):
 
     return prods, keys
 
-NumSpec = namedtuple('NumSpec', ['value', 'unit'])
+parser = argparse.ArgumentParser()
+parser.add_argument('region')
+parser.add_argument('region_short')
+parser.add_argument('mp_threads', type=int)
+args = parser.parse_args()
 
-BASE_URL = 'https://www.lenovo.com/us/en/ticketsatwork'
-DB_FILENAME = 'db.json'
+BASE_URL = f'https://www.lenovo.com/{args.region}'
+DB_DIR = f'./dbs'
+DB_FILENAME = f'db_{args.region_short}.json'
+
+NumSpec = namedtuple('NumSpec', ['value', 'unit'])
 
 s = requests.Session()
 s.headers.update({'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36'})
-# https://www.lenovo.com/us/en/ticketsatwork/p/20XW003EUS/specs/json
-# https://www.lenovo.com/us/en/ticketsatwork/p/20XW003EUS/singlev2/price/json
 
-#db = {
-#    'metadata': {},
-#    'keys': {},
-#    'data': {
-#        'thinkpadx1': {
-#            '22TP2X1X1C9': [
-#                {
-#                    'spec':     val,
-#                    'num_specs': {
-#                        'num_spec': (num, 'unit'),
-#                    },
-#                },
-#            ],
-#        },
-#    }
+#db['data'] = {
+#    'thinkpadx1': {
+#        '22TP2X1X1C9': [
+#            {
+#                'spec': val,
+#                'num_specs': {
+#                    'num_spec': (num, 'unit'),
+#                }, ...
+#            }, ...
+#        ], ...
+#    }, ...
 #}
 db = {
     'metadata': {
+        'region': args.region,
+        'region_short': args.region_short,
         'base url': BASE_URL,
     },
-    'keys': {},
+    # keep track of all keys encountered across all brands
+    'keys': {
+        'info': [],
+        #'api_specs': [], # merged into 'info'
+        'num_specs': [],
+    },
     'data': {}
 }
 
-if 'ticketsatwork' in BASE_URL:
+if args.region == 'us/en/ticketsatwork':
     passcode = 'TICKETSatWK'
     db['metadata']['passcode'] = passcode
     # authenticate with ticketsatwork
@@ -346,45 +361,41 @@ if 'ticketsatwork' in BASE_URL:
         data=payload,
     )
 
-brands = [
-    'thinkpadx1',
-    'thinkpadp',
-    'thinkpadt',
-    'thinkpadx',
-    'thinkpade',
-    'thinkpadl',
-    'thinkpadc',
+# collect brands from seriesListPage api call
+series = [
+    'thinkpad',
+    'IdeaPad',
+    'legion-laptops',
+]
+brands = []
+for ser in series:
+    r = try_request(s, f'{BASE_URL}/c/{ser}/seriesListPage/json')
+    d = json.loads(r.text)
+    for brand_d in d[ser]:
+        brands.append(brand_d['code'])
+brands.extend([
     'thinkbook-series',
     'yoga',
-    'IdeaPad-100',
-    'IdeaPad-Flex-Series',
-    'IdeaPad-300',
-    'IdeaPad-500',
-    'Ideapad-700',
-    'ideapad-900-series',
-    'ideapad-gaming-laptops',
-    'legion-laptops-series',
-    'legion-5-series',
-    'legion-7-series',
-]
+])
+[brands.remove(b) for b in [
+    'thinkpadyoga',
+    'thinkpad11e',
+]]
 #brands = ['thinkpadc', 'IdeaPad-100', 'ideapad-gaming-laptops']
-
-# keep track of all keys encountered across all brands
-db['keys'] = {
-    'info': [],
-    #'api_specs': [], # merged into 'info'
-    'num_specs': [],
-}
+db['metadata']['brands'] = brands
 
 # return a list of tuple(brand dicts, keys)
 results = []
-#for brand in brands:
-#    result, keys = process_brand(s, brand, True)
-#    results.append((result, keys))
-with multiprocessing.Pool(4) as p:
-    results = p.starmap(process_brand, zip(repeat(s), brands))
-    p.terminate()
-    p.join()
+if args.mp_threads <= 1:
+    for brand in brands:
+        result, keys = process_brand(s, brand, True)
+        results.append((result, keys))
+else:
+    with multiprocessing.Pool(args.mp_threads) as p:
+        results = p.starmap(process_brand, zip(repeat(s), brands))
+        p.terminate()
+        print('Pool terminated')
+        p.join()
 
 # merge keys
 for r in results:
@@ -406,8 +417,8 @@ for r in results:
 db['metadata']['total'] = total
 
 print()
-for brand, prods in db['data'].items():
-    print(f'{brand} ({len(prods)})')
+#for brand, prods in db['data'].items():
+#    print(f'{brand} ({len(prods)})')
     #for prod, parts in prods.items():
     #    print(f'  {prod} ({len(parts)})')
         #for part in parts:
@@ -423,12 +434,14 @@ for brand, prods in db['data'].items():
         #            first = False
         #            print(f'{name+":":9} {val}')
         #    print('    ],')
-print('keys')
-for k, v in db['keys'].items():
-    print(f'  {k:10} {v}')
-print('metadata')
-for k, v in db['metadata'].items():
-    print(f'  {k:10} {v}')
+for k, v in db.items():
+    if k not in ['data']:
+        print(k)
+        for k1, v1 in v.items():
+            print(f'  {k1:13} {v1}')
 
-with open(DB_FILENAME, 'w') as f:
+if not os.path.exists(DB_DIR):
+    os.makedirs(DB_DIR)
+with open(f'{DB_DIR}/{DB_FILENAME}', 'w') as f:
     json.dump(db, f)
+    print(f'Wrote to \'{DB_DIR}/{DB_FILENAME}\' on {time.strftime("%c")}')
