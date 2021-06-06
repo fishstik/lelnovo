@@ -333,9 +333,9 @@ s.headers.update({'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537
 #}
 db = {
     'metadata': {
-        'region': args.region,
-        'region_short': args.region_short,
-        'base url': BASE_URL,
+        'region':       args.region,
+        'short region': args.region_short,
+        'base url':     BASE_URL,
     },
     # keep track of all keys encountered across all brands
     'keys': {
