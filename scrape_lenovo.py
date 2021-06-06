@@ -164,6 +164,9 @@ def get_api_specs(session, pn):
         spec_name = spec[0].lower()
         spec_value = spec[1]
         spec_type = spec[2].lower()
+
+        # clean up spec value
+        spec_value = re.sub(r'<sup>|<\/sup>', '', spec_value)
         # assemble numeric specs
         if spec_name in spec_nums and spec_nums[spec_name][0] == spec_type:
             regex          = spec_nums[spec_name][1]
