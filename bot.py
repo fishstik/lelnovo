@@ -288,15 +288,15 @@ async def cmd_status(context):
     await context.send(embed=embed)
 
 if __name__ == '__main__':
-    CFG = configparser.ConfigParser()
+    cfg = configparser.ConfigParser()
     if not os.path.exists(CFG_FILENAME):
-        CFG.add_section('discord')
-        CFG.set('discord', 'token', '')
-        with open(CFG_FILENAME, 'w') as cfg_file: CFG.write(cfg_file)
+        cfg.add_section('discord')
+        cfg.set('discord', 'token', '')
+        with open(CFG_FILENAME, 'w') as cfg_file: cfg.write(cfg_file)
         print(f'Created template \'{CFG_FILENAME}\'. Add bot token and restart.')
         sys.exit()
 
-    CFG.read(CFG_FILENAME)
-    token = CFG['discord']['token']
+    cfg.read(CFG_FILENAME)
+    token = cfg['discord']['token']
     if token: bot.run(token)
     else:     print(f'Token not found in \'{CFG_FILENAME}\'')
