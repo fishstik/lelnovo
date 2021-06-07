@@ -77,16 +77,22 @@ async def on_ready():
 
     print('\n'.join([lelnovo.get_footer(db) for db in dbs.values()]))
 
+async def try_send(context, content=None, embed=None):
+    try:
+        await context.send(content=content, embed=embed)
+    except discord.errors.Forbidden:
+        print(f'No permission to send to server \'{context.guild}\': \'#{context.channel}\'')
+
 # need to add command for every region
 @bot.command()
 async def tck(context, *args):
     embed = parse_command(context, args, region='tck')
-    if embed: await context.send(embed=embed)
+    if embed: await try_send(context, embed=embed)
 
 @bot.command()
 async def us(context, *args):
     embed = parse_command(context, args, region='us')
-    if embed: await context.send(embed=embed)
+    if embed: await try_send(context, embed=embed)
 
 def parse_command(context, args, region):
     guild_id = context.guild.id
@@ -233,7 +239,7 @@ async def cmd_help(context, *args):
     else:
         msg = lelnovo.usage_str
 
-    await context.send(f'```\n{msg}```')
+    await try_send(context, content=f'```\n{msg}```')
 
 @bot.command(name='listregions',
     aliases     = ['lr'],
@@ -258,7 +264,7 @@ async def cmd_listregions(context):
         description=contents,
         color=EMBED_COLOR,
     )
-    await context.send(embed=embed)
+    await try_send(context, embed=embed)
 
 @bot.command(name='status',
     aliases=['st'],
@@ -285,7 +291,7 @@ async def cmd_status(context):
 
             embed.add_field(name=db['metadata']['short region'], value=contents, inline=False)
 
-    await context.send(embed=embed)
+    await try_send(context, embed=embed)
 
 if __name__ == '__main__':
     cfg = configparser.ConfigParser()
