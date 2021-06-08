@@ -348,6 +348,7 @@ REGION_EMOJIS = {
     'tck': ':tickets:',
     'gb':  ':flag_gb:',
     'ca':  ':flag_ca:',
+    'epp': ':maple_leaf:',
 }
 SPEC_ALIASES = {
     'cores':     'cpu cores',

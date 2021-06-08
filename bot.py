@@ -23,7 +23,7 @@ BOT_PREFIX = ('!lelnovo ')
 EMBED_COLOR = 0xe41c1c
 DISABLED_REGIONS = {
     851248442864173057: ['tck'], # lbt2
-    361360173530480640: ['tck'], # SAL
+    361360173530480640: ['tck', 'epp'], # SAL
 }
 
 CMD_ALIASES = {
@@ -85,23 +85,28 @@ async def try_send(context, content=None, embed=None):
 
 # need to add command for every region
 @bot.command()
-async def tck(context, *args):
-    embed = parse_command(context, args, region='tck')
-    if embed: await try_send(context, embed=embed)
-
-@bot.command()
 async def us(context, *args):
     embed = parse_command(context, args, region='us')
     if embed: await try_send(context, embed=embed)
 
 @bot.command()
-async def gb(context, *args):
-    embed = parse_command(context, args, region='gb')
+async def tck(context, *args):
+    embed = parse_command(context, args, region='tck')
     if embed: await try_send(context, embed=embed)
 
 @bot.command()
 async def ca(context, *args):
     embed = parse_command(context, args, region='ca')
+    if embed: await try_send(context, embed=embed)
+
+@bot.command()
+async def epp(context, *args):
+    embed = parse_command(context, args, region='epp')
+    if embed: await try_send(context, embed=embed)
+
+@bot.command()
+async def gb(context, *args):
+    embed = parse_command(context, args, region='gb')
     if embed: await try_send(context, embed=embed)
 
 def parse_command(context, args, region):
