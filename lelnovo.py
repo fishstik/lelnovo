@@ -56,7 +56,7 @@ def search(query, db):
     qs = []
     for term in query.split(','):
         term = term.strip()
-        m = re.match(r'(.*):(.*)', term) # spec:'string' search
+        m = re.match(r'(.*?):(.*)', term) # spec:'string' search
         if m:
             spec   = m.group(1).strip()
             search = m.group(2).strip()
@@ -124,7 +124,7 @@ def search(query, db):
                             num_spec = q[1]
                             op       = q[2]
                             num      = q[3]
-                            if num_spec in part['num_specs'] and op(part['num_specs'][num_spec][0], float(num)):
+                            if num_spec in part['num_specs'] and (num == '' or op(part['num_specs'][num_spec][0], float(num))):
                                 matches.append((num_spec, f'{part["num_specs"][num_spec][0]} {part["num_specs"][num_spec][1]}'))
                                 qs_matched[i] = True
 
@@ -296,12 +296,14 @@ COMMAND_DESCRS = {
         f'{COMMAND_BRIEFS["reg_search"]}\n'
         f'\n'
         f'valid queries:\n'
-        f'  term          searches for \'term\' in any field\n'
-        f'  spec:term     searches for \'term\' in \'spec\'\n'
-        f'                use \'listspecs\' region command to view valid specs\n'
-        f'  num_spec<num  searches for \'num_spec\' that satisfies the condition \'< num\'\n'
-        f'                valid operators are <,<=,==,!=,=>,>\n'
-        f'                use \'listspecs\' region command to view valid num_specs.\n'
+        f'  term            searches for term in any field\n'
+        f'  spec:[term]     searches for term in spec\n'
+        f'                  leave term blank to always list spec in results\n'
+        f'                  use \'listspecs\' region command to view valid specs\n'
+        f'  num_spec<[num]  searches for num_spec that satisfies the condition \'< num\'\n'
+        f'                  leave num blank to always list num_spec in results\n'
+        f'                  valid operators are <,<=,==,!=,=>,>\n'
+        f'                  use \'listspecs\' region command to view valid num_specs.\n'
         f'\n'
         f'example:\n'
         f'  "!lelnovo us search x1e, price<=1400, display:fhd"\n'
@@ -370,7 +372,8 @@ NUM_SPEC_ALIASES = {
     'cores':       'cpu cores',
     'charger':     'ac adapter',
     'hres':        'display res horizontal',
-    'ppi':       'pixel density',
+    'ppi':         'pixel density',
     'screen size': 'display size',
+    'ram':         'memory',
     'vres':        'display res vertical',
 }
