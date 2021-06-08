@@ -11,8 +11,6 @@ from datetime import datetime,timezone,timedelta
 from pprint import pprint
 
 def pretty_duration(time_diff_secs):
-    # Each tuple in the sequence gives the name of a unit, and the number of
-    # previous units which go into it.
     weeks_per_month = 365.242 / 12 / 7
     intervals = [('minute', 60), ('hour', 60), ('day', 24), ('week', 7),
                  ('month', weeks_per_month), ('year', 12)]
@@ -138,8 +136,8 @@ def search(query, db):
     return results, error
 
 # returns (None, None) if part_num not found
-# returns (info, {})    if part_num found but no specs matched
-# returns (info, specs) otherwise
+#         (info, {})    if part_num found but no specs matched
+#         (info, specs) otherwise
 def get_specs(part_num, db, specs=[]):
     ret_specs = {}
     info = {}
@@ -216,14 +214,10 @@ def format_specs(db, info, specs):
     return contents
 
 def get_region_emoji(region_short):
-    emojis = {
-        'us': ':flag_us:',
-        'tck': ':tickets:',
-        'gb': ':flag_gb:',
-        'ca': ':flag_ca:',
-    }
-    if region_short in emojis: return emojis[region_short]
-    else:                      return None
+    if region_short in REGION_EMOJIS:
+        return REGION_EMOJIS[region_short]
+    else:
+        return None
 
 def get_status(db):
     string = ''
@@ -349,7 +343,12 @@ USAGE_STR = (
     f'  "!lelnovo us specs 20TK001EUS"\n'
     f'  "!lelnovo us specs 20TK001EUS display, price, memory"\n'
 )
-
+REGION_EMOJIS = {
+    'us':  ':flag_us:',
+    'tck': ':tickets:',
+    'gb':  ':flag_gb:',
+    'ca':  ':flag_ca:',
+}
 SPEC_ALIASES = {
     'cores':     'cpu cores',
     'charger':   'ac adapter',

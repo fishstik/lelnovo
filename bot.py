@@ -94,7 +94,6 @@ async def us(context, *args):
     embed = parse_command(context, args, region='us')
     if embed: await try_send(context, embed=embed)
 
-
 @bot.command()
 async def gb(context, *args):
     embed = parse_command(context, args, region='gb')
