@@ -27,14 +27,16 @@ def pretty_duration(time_diff_secs):
     shown_num = int(number)
     return '{} {}'.format(shown_num, unit + ('' if shown_num == 1 else 's'))
 
-#results = (
-#    prod = prod_num,
-#    part = part_db,
-#    matches = [
-#        ('spec', value),
-#        ...
-#    ],
-#)
+#results = [
+#    ( 'prod_num',
+#      part_db,
+#      matches = [
+#          ('spec', value),
+#          ...
+#      ]
+#    ),
+#    ...
+#]
 def search(query, db):
     error = False
     ops = {
@@ -47,6 +49,12 @@ def search(query, db):
         '!=': operator.ne,
     }
     # parse query
+    #qs = [
+    #    ('search', term),
+    #    ('spec', spec, term),
+    #    ('num_spec', spec, term),
+    #    ...
+    #]
     qs = []
     for term in query.split(','):
         term = term.strip()
@@ -83,7 +91,7 @@ def search(query, db):
                         q = qs[i]
                         if q[0] == 'search':
                             term = q[1]
-                            # product line search
+                            # product line search (special case since product line not in part dictionary)
                             if term.lower() in prod.lower():
                                 matches.append(('product line', prod))
                                 qs_matched[i] = True
@@ -96,7 +104,7 @@ def search(query, db):
                         elif q[0] == 'spec':
                             spec = q[1]
                             term = q[2]
-                            # product line search
+                            # product line search (special case since product line not in part dictionary)
                             if spec == 'product':
                                 if term.lower() in prod.lower():
                                     matches.append(('product line', prod))
@@ -113,6 +121,8 @@ def search(query, db):
                             if num_spec in part['num_specs'] and op(part['num_specs'][num_spec][0], float(num)):
                                 matches.append((num_spec, f'{part["num_specs"][num_spec][0]} {part["num_specs"][num_spec][1]}'))
                                 qs_matched[i] = True
+
+                    # if all queries matched, add to result list
                     if qs_matched.count(True) == len(qs):
                         results.append((prod, part, matches))
     else: error = True
