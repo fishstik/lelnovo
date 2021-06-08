@@ -177,9 +177,12 @@ def parse_command(context, args, region):
                         else:
                             contents += f' **{price_str}**\n'
 
+                        added = [] # keep track of added spec matches to avoid duplicates
                         spacing = max([len(k[0]) for k in spec_matches])
                         for match in result[2]:
-                            contents += lelnovo.multiline(f'{match[0]:{spacing}}  {match[1]}', indent=spacing+2) + '\n'
+                            if match[0] not in added:
+                                contents += lelnovo.multiline(f'{match[0]:{spacing}}  {match[1]}', indent=spacing+2) + '\n'
+                                added.append(match[0])
                         embed.add_field(
                             name = result[1]['name'],
                             value = contents,

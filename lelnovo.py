@@ -27,6 +27,14 @@ def pretty_duration(time_diff_secs):
     shown_num = int(number)
     return '{} {}'.format(shown_num, unit + ('' if shown_num == 1 else 's'))
 
+#results = (
+#    prod = prod_num,
+#    part = part_db,
+#    matches = [
+#        ('spec', value),
+#        ...
+#    ],
+#)
 def search(query, db):
     error = False
     ops = {
