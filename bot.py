@@ -99,6 +99,11 @@ async def gb(context, *args):
     embed = parse_command(context, args, region='gb')
     if embed: await try_send(context, embed=embed)
 
+@bot.command()
+async def ca(context, *args):
+    embed = parse_command(context, args, region='ca')
+    if embed: await try_send(context, embed=embed)
+
 def parse_command(context, args, region):
     guild_id = context.guild.id
     embed = None

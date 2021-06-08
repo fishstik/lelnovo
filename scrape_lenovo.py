@@ -145,6 +145,8 @@ def get_api_specs(session, pn):
         'form factor',
         'freeformfacet1',
         'freeformfacet2',
+        'freeformfacet3',
+        'freeformfacet4',
         'freeformfacet5',
         'longdesc_sec',
         'optional device',
