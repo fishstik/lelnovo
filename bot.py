@@ -22,7 +22,7 @@ DB_DIR = './dbs'
 BOT_PREFIX = ('!lelnovo ')
 EMBED_COLOR = 0xe41c1c
 DISABLED_REGIONS = {
-    851248442864173057: ['tck'], # lbt2
+    #851248442864173057: ['tck'], # lbt2
     361360173530480640: ['tck', 'epp'], # SAL
 }
 
@@ -79,7 +79,7 @@ async def on_ready():
 
 async def try_send(context, content=None, embed=None):
     try:
-        await context.send(content=content, embed=embed)
+        await context.reply(content=content, embed=embed)
     except discord.errors.Forbidden:
         print(f'No permission to send to server \'{context.guild}\': \'#{context.channel}\'')
 
@@ -170,7 +170,7 @@ def parse_command(context, args, region):
 
             embed.set_footer(text = lelnovo.get_footer(db))
         elif command in ['search', 's']:
-            params = ' '.join(params)
+            params = ' '.join(params).strip(',')
             if params:
                 count = 0
 
