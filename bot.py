@@ -62,28 +62,8 @@ bot = discord.ext.commands.Bot(
 #}
 dbs = {}
 
-@bot.event
-async def on_ready():
-    global dbs
-    print('Logged in as {0}'.format(bot.user.name))
+### start command for every region ###
 
-    file_handler = FileHandler()
-    observer = Observer()
-    observer.schedule(file_handler, path=DB_DIR)
-    observer.start()
-    print(f'Monitoring \'{DB_DIR}\'')
-
-    dbs = lelnovo.get_dbs(DB_DIR)
-
-    print('\n'.join([lelnovo.get_footer(db) for db in dbs.values()]))
-
-async def try_send(context, content=None, embed=None):
-    try:
-        await context.reply(content=content, embed=embed)
-    except discord.errors.Forbidden:
-        print(f'No permission to send to server \'{context.guild}\': \'#{context.channel}\'')
-
-# need to add command for every region
 @bot.command()
 async def us(context, *args):
     embed = parse_command(context, args, region='us')
@@ -108,6 +88,124 @@ async def epp(context, *args):
 async def gb(context, *args):
     embed = parse_command(context, args, region='gb')
     if embed: await try_send(context, embed=embed)
+
+### end region commands ###
+
+@bot.command(name='help',
+    aliases = ['h'],
+)
+async def cmd_help(context, *args):
+    arg = ' '.join(args)
+    # searching in non-region commands first
+    # so conflicting name in region commands are inaccessible
+    if arg == 'help':
+        msg = 'haha nice try'
+    elif arg in CMD_ALIASES.values():
+        msg = ''.join(lelnovo.COMMAND_DESCRS[arg])
+    elif arg in CMD_ALIASES.keys():
+        msg = ''.join(lelnovo.COMMAND_DESCRS[CMD_ALIASES[arg]])
+    elif arg in REGCMD_ALIASES.values():
+        msg = ''.join(lelnovo.COMMAND_DESCRS[f'reg_{arg}'])
+    elif arg in REGCMD_ALIASES.keys():
+        msg = ''.join(lelnovo.COMMAND_DESCRS[f'reg_{REGCMD_ALIASES[arg]}'])
+    else:
+        msg = lelnovo.USAGE_STR
+
+    await try_send(context, content=f'```\n{msg}```')
+
+@bot.command(name='listregions',
+    aliases     = ['lr'],
+    brief       = lelnovo.COMMAND_BRIEFS['listregions'],
+    description = lelnovo.COMMAND_DESCRS['listregions'],
+)
+async def cmd_listregions(context):
+    embed = discord.Embed(
+        title='Region List',
+        description=format_regions(context.guild.id),
+        color=EMBED_COLOR,
+    )
+    await try_send(context, embed=embed)
+
+@bot.command(name='status',
+    aliases=['st'],
+    brief='display status for all available databases',
+    description='display status for all available databases',
+)
+async def cmd_status(context):
+    guild_id = context.guild.id
+
+    embed = discord.Embed(
+        title='All Database Statuses',
+        color=EMBED_COLOR,
+    )
+    for k, db in dbs.items():
+        region = db['metadata']['short region']
+        if not (guild_id in DISABLED_REGIONS and region in DISABLED_REGIONS[guild_id]):
+            contents = ''
+            contents += lelnovo.get_status(db)
+
+            footer = lelnovo.get_footer(db)
+            # remove divider line
+            footer = '\n'.join(footer.split('\n')[1:])
+            contents += f'{footer}\n'
+
+            embed.add_field(name=db['metadata']['short region'], value=contents, inline=False)
+
+    await try_send(context, embed=embed)
+
+@bot.event
+async def on_ready():
+    global dbs
+    print('Logged in as {0}'.format(bot.user.name))
+
+    file_handler = FileHandler()
+    observer = Observer()
+    observer.schedule(file_handler, path=DB_DIR)
+    observer.start()
+    print(f'Monitoring \'{DB_DIR}\'')
+
+    dbs = lelnovo.get_dbs(DB_DIR)
+
+    print('\n'.join([lelnovo.get_footer(db) for db in dbs.values()]))
+
+@bot.event
+async def on_command_error(context, error):
+    if isinstance(error, discord.ext.commands.CommandNotFound):
+        cmd = context.invoked_with
+
+        if cmd in REGCMD_ALIASES: cmd = REGCMD_ALIASES[cmd]
+        if cmd in REGCMD_ALIASES.values():
+            embed = discord.Embed(
+                title=f'No region specified for command `{cmd}`',
+                color=EMBED_COLOR,
+            )
+            embed.add_field(
+                name='Available regions',
+                value=format_regions(context.guild.id),
+                inline=False,
+            )
+            await try_send(context, embed=embed)
+        else:
+            print(f'Ignoring invalid command \'{cmd}\'')
+    else: raise error
+
+async def try_send(context, content=None, embed=None):
+    try:
+        await context.reply(content=content, embed=embed)
+    except discord.errors.Forbidden:
+        print(f'No permission to send to server \'{context.guild}\': \'#{context.channel}\'')
+
+def format_regions(guild_id):
+    contents = ''
+    for _, db in dbs.items():
+        region = db['metadata']['region']
+        region_short = db['metadata']['short region']
+
+        if not (guild_id in DISABLED_REGIONS and region_short in DISABLED_REGIONS[guild_id]):
+            contents += f'`{region_short:3}` {lelnovo.get_region_emoji(region_short)}'
+            contents += f' [{region}]({db["metadata"]["base url"]})'
+            contents += '\n'
+    return contents
 
 def parse_command(context, args, region):
     guild_id = context.guild.id
@@ -172,6 +270,7 @@ def parse_command(context, args, region):
         elif command in ['search', 's']:
             params = ' '.join(params).strip(',')
             if params:
+                summary = ''
                 count = 0
 
                 results, error = lelnovo.search(params, db)
@@ -181,9 +280,14 @@ def parse_command(context, args, region):
                         description = f'Invalid query `{params}` (check commas!)',
                         color=EMBED_COLOR,
                     )
+                elif not results:
+                    embed = discord.Embed(
+                        title = f'{region_emoji} No search results for `{params}`',
+                        color=EMBED_COLOR,
+                    )
                 else:
                     embed = discord.Embed(
-                        title = f'{region_emoji} Search Results for \'{params}\'',
+                        title = f'{region_emoji} Search Results for `{params}`',
                         color=EMBED_COLOR,
                     )
                     for result in results:
@@ -218,8 +322,9 @@ def parse_command(context, args, region):
                         if count == 10:
                             break
 
-                    summary = f'Found **{len(results)}** results for `{params}`'
+                    summary = f'Found **{len(results)}** result{"s" if len(results)!=1 else ""} for `{params}`'
                     if len(results) > 10: summary += ' (only showing first 10)'
+
                     embed.add_field(
                         name = '\u200b',
                         value = summary,
@@ -244,7 +349,7 @@ def parse_command(context, args, region):
                     )
                 else:
                     embed = discord.Embed(
-                        title=f'{region_emoji} Specs for \'{part_num}\' not found',
+                        title=f'{region_emoji} Specs for `{part_num}` not found',
                         description=f'Check that the part number is valid. Discontinued or upcoming products are not in database.',
                         color=EMBED_COLOR,
                     )
@@ -254,87 +359,6 @@ def parse_command(context, args, region):
             print(f'Unrecognized command \'{" ".join(args)}\'')
 
     return embed
-
-@bot.command(name='help',
-    aliases = ['h'],
-)
-async def cmd_help(context, *args):
-    arg = ' '.join(args)
-    # searching in non-region commands first
-    # so conflicting name in region commands are inaccessible
-    if arg == 'help':
-        msg = 'haha nice try'
-    elif arg in CMD_ALIASES.values():
-        msg = ''.join(lelnovo.COMMAND_DESCRS[arg])
-    elif arg in CMD_ALIASES.keys():
-        msg = ''.join(lelnovo.COMMAND_DESCRS[CMD_ALIASES[arg]])
-    elif arg in REGCMD_ALIASES.values():
-        msg = ''.join(lelnovo.COMMAND_DESCRS[f'reg_{arg}'])
-    elif arg in REGCMD_ALIASES.keys():
-        msg = ''.join(lelnovo.COMMAND_DESCRS[f'reg_{REGCMD_ALIASES[arg]}'])
-    else:
-        msg = lelnovo.USAGE_STR
-
-    await try_send(context, content=f'```\n{msg}```')
-
-@bot.command(name='listregions',
-    aliases     = ['lr'],
-    brief       = lelnovo.COMMAND_BRIEFS['listregions'],
-    description = lelnovo.COMMAND_DESCRS['listregions'],
-)
-async def cmd_listregions(context):
-    guild_id = context.guild.id
-
-    contents = ''
-    for _, db in dbs.items():
-        region = db['metadata']['region']
-        region_short = db['metadata']['short region']
-
-        if not (guild_id in DISABLED_REGIONS and region_short in DISABLED_REGIONS[guild_id]):
-            contents += f'`{region_short:3}` {lelnovo.get_region_emoji(region_short)}'
-            contents += f' [{region}]({db["metadata"]["base url"]})'
-            contents += '\n'
-
-    embed = discord.Embed(
-        title='Region List',
-        description=contents,
-        color=EMBED_COLOR,
-    )
-    await try_send(context, embed=embed)
-
-@bot.command(name='status',
-    aliases=['st'],
-    brief='display status for all available databases',
-    description='display status for all available databases',
-)
-async def cmd_status(context):
-    guild_id = context.guild.id
-
-    embed = discord.Embed(
-        title='All Database Statuses',
-        color=EMBED_COLOR,
-    )
-    for k, db in dbs.items():
-        region = db['metadata']['short region']
-        if not (guild_id in DISABLED_REGIONS and region in DISABLED_REGIONS[guild_id]):
-            contents = ''
-            contents += lelnovo.get_status(db)
-
-            footer = lelnovo.get_footer(db)
-            # remove divider line
-            footer = '\n'.join(footer.split('\n')[1:])
-            contents += f'{footer}\n'
-
-            embed.add_field(name=db['metadata']['short region'], value=contents, inline=False)
-
-    await try_send(context, embed=embed)
-
-@bot.event
-async def on_command_error(context, error):
-    if isinstance(error, discord.ext.commands.CommandNotFound):
-        print(f'Ignoring invalid command \'{context.invoked_with}\'')
-        return
-    raise error
 
 if __name__ == '__main__':
     cfg = configparser.ConfigParser()
