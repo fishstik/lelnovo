@@ -18,6 +18,8 @@ def try_request(s, url, wait_s=1):
         r = s.get(url)
         if r.status_code == 200:
             return r
+        elif r.status_code == 404:
+            return None
         else:
             #print(f'request {url} failed with {r.status_code}. Waiting {wait_s}s ...')
             #time.sleep(wait_s)
@@ -119,6 +121,7 @@ def get_api_specs(session, pn):
         'screen size':                'display',
         'vidram':                     'graphics',
         'weight in lbs':              'weight',
+        'weight in kg':               'weight',
         'width_met':                  'width',
         'world facing camera':        'second camera',
         'wlan':                       'wireless',
@@ -134,6 +137,7 @@ def get_api_specs(session, pn):
         'screen size':       ('facet features mtmcto',    r'([\d\.]+)"',      float, 'in', ['display size']),
         'width_met':         ('report usage',             r'([\d\.]+) ?mm',   float, 'mm', ['width']),
         'weight in lbs':     ('facet features mtmcto',    r'([\d\.]+)',       float, 'lb', ['weight']),
+        'weight in kg':      ('facet features mtmcto',    r'([\d\.]+)',       float, 'kg', ['weight']),
     }
     spec_ignore = [
         'feature trackpoint',
@@ -223,12 +227,16 @@ def process_brand(s, brand, print_progress=False):
     start = time.time()
     if print_progress: print(brand, end='\r')
 
+    pcodes = []
     if brand == 'yoga':
         r = try_request(s, f'{BASE_URL}/yoga/products')
-        pcodes = []
         soup = BeautifulSoup(r.content, 'html.parser')
         for yoga in soup.select('section.yoga-list-convertibles'):
             pcodes.extend([p['data-article-test'] for p in yoga.select('*[data-article-test]')])
+    elif brand == 'ideapad-s-series':
+        r = try_request(s, f'{BASE_URL}/d/ideapad-ultra-thin')
+        soup = BeautifulSoup(r.content, 'html.parser')
+        pcodes.extend(soup.select_one('#partNumbers')['data-partnumbers'].strip(',').split(','))
     else:
         r = try_request(s, f'{BASE_URL}/c/{brand}')
         soup = BeautifulSoup(r.content, 'html.parser')
@@ -247,54 +255,58 @@ def process_brand(s, brand, print_progress=False):
         start = time.time()
 
         r = try_request(s, f'{BASE_URL}/p/{prod}')
-        soup = BeautifulSoup(r.content, 'html.parser')
+        if r:
+            soup = BeautifulSoup(r.content, 'html.parser')
 
-        cur_str += f' {time.time()-start:.1f}s'
-        if print_progress: print(cur_str, end='\r')
-        start = time.time()
+            cur_str += f' {time.time()-start:.1f}s'
+            if print_progress: print(cur_str, end='\r')
+            start = time.time()
 
-        part_count = 0
-        for prod in soup.select('li.tabbedBrowse-productListing-container, div.tabbedBrowse-module.singleModelView'):
-            button = prod.select_one('form[id^="addToCartFormTop"] button[class*="tabbedBrowse-productListing-footer"]')
-            if button:
-                res = get_info(prod, button)
-                if res:
-                    pn, info = res
+            part_count = 0
+            for prod in soup.select('li.tabbedBrowse-productListing-container, div.tabbedBrowse-module.singleModelView'):
+                button = prod.select_one('form[id^="addToCartFormTop"] button[class*="tabbedBrowse-productListing-footer"]')
+                if button:
+                    res = get_info(prod, button)
+                    if res:
+                        pn, info = res
 
-                    #info['api_specs'], info['num_specs'] = get_api_specs(s, pn)
-                    api_specs, num_specs = get_api_specs(s, pn)
+                        #info['api_specs'], info['num_specs'] = get_api_specs(s, pn)
+                        api_specs, num_specs = get_api_specs(s, pn)
 
-                    # get price info from api call
-                    r = try_request(s, f'{BASE_URL}/p/{pn}/singlev2/price/json')
-                    if r:
-                        d = json.loads(r.text)
-                        currency = d['currencySymbol']
-                        if d['eCoupon']: info['coupon'] = d['eCoupon']
-                        price_str = d['startingAtPrice']
-                        for ch in [currency, ',']:
-                            if ch in price_str: price_str = price_str.replace(ch, '')
-                        num_specs['price'] = NumSpec(float(price_str), currency)
+                        # get price info from api call
+                        r = try_request(s, f'{BASE_URL}/p/{pn}/singlev2/price/json')
+                        if r:
+                            d = json.loads(r.text)
+                            currency = d['currencySymbol']
+                            if d['eCoupon']: info['coupon'] = d['eCoupon']
+                            price_str = d['startingAtPrice']
+                            for ch in [currency, ',']:
+                                if ch in price_str: price_str = price_str.replace(ch, '')
+                            num_specs['price'] = NumSpec(float(price_str), currency)
 
-                    # merge api specs with info
-                    info.update(api_specs)
-                    # store num_specs as own entry
-                    info['num_specs'] = num_specs
+                        # merge api specs with info
+                        info.update(api_specs)
+                        # store num_specs as own entry
+                        info['num_specs'] = num_specs
 
-                    # add weight unit to info-weight from num_spec-weight
-                    if 'weight' in info and 'weight' in info['num_specs']:
-                        info['weight'] += f' {info["num_specs"]["weight"]}'
+                        # add weight unit to info-weight from num_spec-weight
+                        if 'weight' in info and 'weight' in info['num_specs']:
+                            info['weight'] += f' {info["num_specs"]["weight"].unit}'
 
-                    # collect and merge keys
-                    keys['info'] = list(set(keys['info'] + list(info.keys()))) 
-                    #keys['api_specs'] = list(set(keys['api_specs'] + list(info['api_specs'].keys())))
-                    keys['num_specs'] = list(set(keys['num_specs'] + list(info['num_specs'].keys())))
+                        # collect and merge keys
+                        keys['info'] = list(set(keys['info'] + list(info.keys()))) 
+                        #keys['api_specs'] = list(set(keys['api_specs'] + list(info['api_specs'].keys())))
+                        keys['num_specs'] = list(set(keys['num_specs'] + list(info['num_specs'].keys())))
 
-                    parts.append(info)
+                        parts.append(info)
 
-                    part_count += 1
-                if print_progress: print(f'{cur_str} {"#"*part_count}{part_count}\r', end='\r')
-        print(f'{cur_str:46} {"#"*part_count}{part_count} {time.time()-start:.1f}s')
-        prod_count += 1
+                        part_count += 1
+                    if print_progress: print(f'{cur_str} {"#"*part_count}{part_count}\r', end='\r')
+            print(f'{cur_str:46} {"#"*part_count}{part_count} {time.time()-start:.1f}s')
+            prod_count += 1
+        else:
+            cur_str += ' 404!'
+            print(f'{cur_str:46} {time.time()-start:.1f}s')
 
     # clean up any empty prods e.g. from url redirect
     #new_prods = {}
@@ -365,7 +377,7 @@ if args.region == 'us/en/ticketsatwork':
 
 # collect brands from seriesListPage api call
 series = [
-    'thinkpad',
+    'THINKPAD' if args.region == 'gb/en' else 'thinkpad',
     'IdeaPad',
     'legion-laptops',
 ]
@@ -381,9 +393,11 @@ brands.extend([
 ])
 [brands.remove(b) for b in [
     'thinkpadyoga',
+    'thinkpadyoga-2',
     'thinkpad11e',
-]]
-#brands = ['thinkpadc', 'IdeaPad-100', 'ideapad-gaming-laptops']
+] if b in brands]
+#brands = ['IdeaPad-300',]
+
 db['metadata']['brands'] = brands
 
 # return a list of tuple(brand dicts, keys)

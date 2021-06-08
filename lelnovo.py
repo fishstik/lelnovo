@@ -180,6 +180,8 @@ def get_region_emoji(region_short):
     emojis = {
         'us': ':flag_us:',
         'tck': ':tickets:',
+        'gb': ':flag_gb:',
+        'ca': ':flag_ca:',
     }
     if region_short in emojis: return emojis[region_short]
     else:                      return None
