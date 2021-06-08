@@ -62,8 +62,11 @@ def search(query, db):
         if m:
             spec   = m.group(1).strip()
             search = m.group(2).strip()
+
             if str(spec).lower() in [k.lower() for k in db['keys']['info']] + ['product']:
                 qs.append(('spec', spec, search))
+            elif str(spec).lower() in SPEC_ALIASES:
+                qs.append(('spec', SPEC_ALIASES[spec], search))
             else:
                 print(f'Ignoring unhandled spec \'{spec}\' in \'{term}\'')
         else:
@@ -72,10 +75,15 @@ def search(query, db):
                 spec =   m.group(1).strip()
                 op_str = m.group(2).strip()
                 num    = m.group(3).strip()
-                if spec in db['keys']['num_specs'] and op_str in ops:
-                    qs.append(('num_spec', spec, ops[op_str], num))
+                if op_str in ops:
+                    if spec in db['keys']['num_specs']:
+                        qs.append(('num_spec', spec, ops[op_str], num))
+                    elif spec in NUM_SPEC_ALIASES and NUM_SPEC_ALIASES[spec] in db['keys']['num_specs']:
+                        qs.append(('num_spec', NUM_SPEC_ALIASES[spec], ops[op_str], num))
+                    else:
+                        print(f'Ignoring unhandled num_spec \'{spec}\' in \'{term}\'')
                 else:
-                    print(f'Ignoring unhandled num_spec \'{spec}\' or num_spec operator \'{m.group(2)}\' in \'{term}\'')
+                    print(f'Ignoring unhandled num_spec operator \'{m.group(2)}\' in \'{term}\'')
             else: # generic value search
                 qs.append(('search', term))
     #pprint(qs)
@@ -129,6 +137,9 @@ def search(query, db):
 
     return results, error
 
+# returns (None, None) if part_num not found
+# returns (info, {})    if part_num found but no specs matched
+# returns (info, specs) otherwise
 def get_specs(part_num, db, specs=[]):
     ret_specs = {}
     info = {}
@@ -143,12 +154,19 @@ def get_specs(part_num, db, specs=[]):
                     if not specs:
                         ret_specs = part
                     else:
+                        # replace spec aliases with real spec
+                        for i in range(len(specs)):
+                            if specs[i] in SPEC_ALIASES: specs[i] = SPEC_ALIASES[specs[i]]
+                            elif specs[i] in NUM_SPEC_ALIASES: specs[i] = NUM_SPEC_ALIASES[specs[i]]
+
+                        # if spec is both normal spec and num spec, ignore num spec
                         for spec in specs:
                             if spec in part:
                                 ret_specs[spec] = part[spec]
                             elif spec in part['num_specs']:
                                 ret_specs[spec] = f'{part["num_specs"][spec][0]} {part["num_specs"][spec][1]}'
                     return info, ret_specs
+    return None, None
 
 def multiline(line, indent, max_width=73):
     wrapper = textwrap.TextWrapper(
@@ -157,6 +175,7 @@ def multiline(line, indent, max_width=73):
     )
     return '\n'.join([f'`{l}`' for l in wrapper.fill(line).split('\n')])
 
+# takes (info, specs) return value from get_specs
 def format_specs(db, info, specs):
     contents = ''
     contents += f'{info["part number"]} ([link]({db["metadata"]["base url"]}/p/{info["part number"]}))'
@@ -169,28 +188,30 @@ def format_specs(db, info, specs):
     else:
         contents += f' **{price_str}**\n'
 
-    num_specs = {}
-    for spec, value in specs.items():
-        spacing = max([len(k) for k in specs.keys()])
-        if spec == 'num_specs': # save num_specs sub-dict for later
-            num_specs = specs[spec]
-        else: # add regular specs
-            line = f'{spec:>{spacing}}  {value}'
-            contents += f'{multiline(line, indent=spacing+2)}\n'
+    if specs:
+        num_specs = {}
+        for spec, value in specs.items():
+            spacing = max([len(k) for k in specs.keys()])
+            if spec == 'num_specs': # save num_specs sub-dict for later
+                num_specs = specs[spec]
+            else: # add regular specs
+                line = f'{spec:>{spacing}}  {value}'
+                contents += f'{multiline(line, indent=spacing+2)}\n'
 
-        # format num_specs sub-dict
-        if num_specs:
-            num_spec_contents = f'`{"num_specs":>{spacing}}:`\n'
-            num_spec_spacing = max([len(k) for k in num_specs.keys()])
-            for num_spec, tup in num_specs.items():
-                val, unit = tup
-                line = f'{num_spec:>{num_spec_spacing}}  {val} {unit}'
-                num_spec_contents += f'{multiline(line, indent=num_spec_spacing+2)}\n'
-            # only add num_specs if doesnt exceed length limit
-            if len(contents+num_spec_contents) < 2048:
-                contents += num_spec_contents
-            else:
-                contents += f'`{"num_specs":>{spacing}}  [omitted. use \'specs {info["part number"]} num_specs\' to view.]`\n'
+            # format num_specs sub-dict
+            if num_specs:
+                num_spec_contents = f'`{"num_specs":>{spacing}}:`\n'
+                num_spec_spacing = max([len(k) for k in num_specs.keys()])
+                for num_spec, tup in num_specs.items():
+                    val, unit = tup
+                    line = f'{num_spec:>{num_spec_spacing}}  {val} {unit}'
+                    num_spec_contents += f'{multiline(line, indent=num_spec_spacing+2)}\n'
+                # only add num_specs if doesnt exceed length limit
+                if len(contents+num_spec_contents) < 2048:
+                    contents += num_spec_contents
+                else:
+                    contents += f'`{"num_specs":>{spacing}}  [omitted. use \'specs {info["part number"]} num_specs\' to view.]`\n'
+    else: contents += f'`[no valid specs to list]`\n'
 
     return contents
 
@@ -239,7 +260,7 @@ def get_dbs(dir):
                 dbs[db['metadata']['short region']] = db
     return dbs
 
-command_briefs= {
+COMMAND_BRIEFS = {
     'listregions':   'list all available regions',
     'status':        'display status for all available databases',
     'reg_status':    'display region\'s database status',
@@ -247,27 +268,27 @@ command_briefs= {
     'reg_search':    'search for products with queries separated by commas',
     'reg_specs':     'list specs for a given product number',
 }
-command_descrs = {
+COMMAND_DESCRS = {
     'listregions': (
         f'usage: !lelnovo listregions\n'
         f'       !lelnovo lr\n'
         f'\n'
-        f'{command_briefs["listregions"]}'
+        f'{COMMAND_BRIEFS["listregions"]}'
     ),
     'status': (
         f'usage: !lelnovo status\n'
         f'       !lelnovo st\n'
         f'\n'
-        f'{command_briefs["status"]}'
+        f'{COMMAND_BRIEFS["status"]}'
         # add reg_status help since it's inaccessible
         f'\n'
         f'\n'
         f'usage: !lelnovo [region] status\n'
         f'       !lelnovo [region] st\n'
         f'\n'
-        f'{command_briefs["reg_status"]}'
+        f'{COMMAND_BRIEFS["reg_status"]}'
     ),
-    'reg_status':  command_briefs['reg_status'], # inaccessible
+    'reg_status':  COMMAND_BRIEFS['reg_status'], # inaccessible
     'reg_listspecs': (
         f'usage: !lelnovo [region] listspecs\n'
         f'       !lelnovo [region] ls\n'
@@ -278,7 +299,7 @@ command_descrs = {
         f'usage: !lelnovo [region] search query[, query, ...]\n'
         f'       !lelnovo [region] s      query[, query, ...]\n'
         f'\n'
-        f'{command_briefs["reg_search"]}\n'
+        f'{COMMAND_BRIEFS["reg_search"]}\n'
         f'\n'
         f'valid queries:\n'
         f'  term          searches for \'term\' in any field\n'
@@ -295,7 +316,7 @@ command_descrs = {
         f'usage: !lelnovo [region] specs prodnum [spec[, spec, ...]]\n'
         f'       !lelnovo [region] sp    prodnum [spec[, spec, ...]]\n'
         f'\n'
-        f'{command_briefs["reg_specs"]}\n',
+        f'{COMMAND_BRIEFS["reg_specs"]}\n',
         f'if specs are given, filters result by the given comma-separated specs.\n'
         f'use \'listspecs\' to view valid specs.\n'
         f'\n'
@@ -304,22 +325,22 @@ command_descrs = {
         f'  "!lelnovo us specs 20TK001EUS display, price, memory"\n'
     ),
 }
-usage_str = (
+USAGE_STR = (
     f'usage: !lelnovo [region] command [parameters, ...]\n'
     f'\n'
     f'commands without region:\n'
     f'  {"h|help"        :14}    show this help message\n'
     f'  {"h|help command":14}    show help for command\n'
-    f'  {"lr|listregions":14}    {command_briefs["listregions"]}\n'
-    f'  {"st|status"     :14}    {command_briefs["status"]}\n'
+    f'  {"lr|listregions":14}    {COMMAND_BRIEFS["listregions"]}\n'
+    f'  {"st|status"     :14}    {COMMAND_BRIEFS["status"]}\n'
     f'\n'
     f'commands with region:\n'
-    f'  {"st|status"     :14}    {command_briefs["reg_status"]}\n'
-    f'  {"ls|listspecs"  :14}    {command_briefs["reg_listspecs"]}\n'
+    f'  {"st|status"     :14}    {COMMAND_BRIEFS["reg_status"]}\n'
+    f'  {"ls|listspecs"  :14}    {COMMAND_BRIEFS["reg_listspecs"]}\n'
     f'  {"s|search query[, query, ...]"}\n'
-    f'  {" "             :14}    {command_briefs["reg_search"]}\n'
+    f'  {" "             :14}    {COMMAND_BRIEFS["reg_search"]}\n'
     f'  {"sp|specs prodnum [spec[, spec, ...]]"}\n'
-    f'  {" "             :14}    {command_briefs["reg_specs"]}\n'
+    f'  {" "             :14}    {COMMAND_BRIEFS["reg_specs"]}\n'
     f'\n'
     f'examples:\n'
     f'  "!lelnovo listregions"\n'
@@ -328,62 +349,28 @@ usage_str = (
     f'  "!lelnovo us specs 20TK001EUS"\n'
     f'  "!lelnovo us specs 20TK001EUS display, price, memory"\n'
 )
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('command')
-    args = parser.parse_args()
 
-    db = get_db('db.json')
-
-    words = re.split('\s+', args.command.strip())
-    if len(words) == 1:
-        command = words[0]
-        if command == 'listspecs':
-            print(f'valid specs:')
-            specs = sorted(db['keys']['info'])
-            for i in range(0, len(specs), 5):
-                print('  '+' '.join([f'{spec:20}' for spec in specs[i:i+5]]))
-
-            print(f'valid num_specs:')
-            specs = sorted(db['keys']['num_specs'])
-            for i in range(0, len(specs), 3):
-                print('  '+' '.join([f'{spec:30}' for spec in specs[i:i+3]]))
-        elif command == 'status':
-            print(get_status(db))
-            print(get_footer(db))
-        elif command == 'help':
-            print(usage_str)
-        else:
-            print(f'Unrecognized command \'{command}\'')
-    else:
-        command, rest = words[0], ' '.join(words[1:])
-        if command == 'search':
-            res, error = search(rest, db)
-            if error:
-                print(f'Invalid query \'{rest}\'')
-            else:
-                for re in res:
-                    prod  = re[0]
-                    pn    = re[1]['part number']
-                    price = re[1]['num_specs']['price']
-                    spec_matches = re[2]
-                    print(f'{pn} -- {price[1]}{price[0]}')
-                    spacing = max([len(k[0]) for k in spec_matches])
-                    for match in spec_matches:
-                        print(f'  {match[0]:{spacing}}  {match[1]}')
-            print(f'Found {len(res)} results for \'{rest}\'')
-        elif command == 'specs':
-            specs = []
-            words = re.split('\s+', rest, 1)
-            part_num = words[0]
-            # user-provided specs
-            if len(words) > 1: specs = [s.strip() for s in words[1].split(',')]
-            res = get_specs(part_num, db, specs)
-
-            if res:
-                info, ret_specs = res
-                if info and ret_specs: print(format_specs(db, info, ret_specs))
-            else:
-                print(f'Specs for \'{part_num}\' not found')
-        else:
-            print(f'Unrecognized command \'{command}\'')
+SPEC_ALIASES = {
+    'cores':     'cpu cores',
+    'charger':   'ac adapter',
+    'cpu':       'processor',
+    'disc':      'optical drive',
+    'fp':        'fp reader',
+    'gpu':       'graphics',
+    'pn':        'part number',
+    'os':        'operating system',
+    'ram':       'memory',
+    'screen':    'display',
+    'sim':       'sim card',
+    'tpm':       'security chip',
+    'touch':     'touch screen',
+    'wifi':      'wireless',
+}
+NUM_SPEC_ALIASES = {
+    'cores':       'cpu cores',
+    'charger':     'ac adapter',
+    'hres':        'display res horizontal',
+    'ppi':       'pixel density',
+    'screen size': 'display size',
+    'vres':        'display res vertical',
+}

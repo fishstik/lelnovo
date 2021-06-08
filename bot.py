@@ -122,23 +122,40 @@ def parse_command(context, args, region):
             embed.set_footer(text = lelnovo.get_footer(db))
         elif command in ['listspecs', 'ls']:
             embed = discord.Embed(
-                title='Specs List',
+                title=f'{region_emoji} Specs List',
                 description='All specs that can be used in `search` and `specs` commands\n',
                 color=EMBED_COLOR,
             )
-            contents = ''
             specs = sorted(db['keys']['info'])
+            # convert {'alias': 'spec'} to {'spec': ['alias', ...]}
+            spec_aliases = {}
+            for k, v in dict(sorted(lelnovo.SPEC_ALIASES.items())).items():
+                if v in spec_aliases: spec_aliases[v].append(k)
+                else:                 spec_aliases[v] = [k]
+            # add aliases to spec
+            for i in range(len(specs)):
+                if specs[i] in spec_aliases:
+                    specs[i] = '|'.join([specs[i]] + spec_aliases[specs[i]])
             contents = '```'
             for i in range(0, len(specs), 3):
-                contents += ('  '+' '.join([f'{spec:20}' for spec in specs[i:i+3]])+'\n')
+                contents += (' '.join([f'{spec:20}' for spec in specs[i:i+3]])+'\n')
             contents += '```'
             embed.add_field(name='specs', value=contents, inline=False)
 
             specs = sorted(db['keys']['num_specs'])
+            # convert {'alias': 'spec'} to {'spec': ['alias', ...]}
+            spec_aliases = {}
+            for k, v in dict(sorted(lelnovo.NUM_SPEC_ALIASES.items())).items():
+                if v in spec_aliases: spec_aliases[v].append(k)
+                else:                 spec_aliases[v] = [k]
+            # add aliases to spec
+            for i in range(len(specs)):
+                if specs[i] in spec_aliases:
+                    specs[i] = '|'.join([specs[i]] + spec_aliases[specs[i]])
             contents = 'These specs contain numbers that can be used in a numeric `search` condition\n'
             contents += '```'
             for i in range(0, len(specs), 2):
-                contents += ('  '+' '.join([f'{spec:20}' for spec in specs[i:i+2]])+'\n')
+                contents += (' '.join([f'{spec:26}' for spec in specs[i:i+2]])+'\n')
             contents += '```'
             embed.add_field(name='number specs', value=contents, inline=False)
 
@@ -207,20 +224,19 @@ def parse_command(context, args, region):
                 part_num = words[0]
                 # user-provided specs
                 if len(words) > 1: specs = [s.strip() for s in words[1].split(',')]
-                res = lelnovo.get_specs(part_num, db, specs)
 
-                if res:
-                    info, ret_specs = res
-                    if info and ret_specs:
-                        embed = discord.Embed(
-                            title=f'{region_emoji} Specs for {info["name"]}',
-                            description=lelnovo.format_specs(db, info, ret_specs)[:2048],
-                            color=EMBED_COLOR,
-                        )
+                info, ret_specs = lelnovo.get_specs(part_num, db, specs)
+                # Found part
+                if info:
+                    embed = discord.Embed(
+                        title=f'{region_emoji} Specs for {info["name"]}',
+                        description=lelnovo.format_specs(db, info, ret_specs)[:2048],
+                        color=EMBED_COLOR,
+                    )
                 else:
                     embed = discord.Embed(
                         title=f'{region_emoji} Specs for \'{part_num}\' not found',
-                        description=f'Check that the part number is valid. Discontinued products are not in database.',
+                        description=f'Check that the part number is valid. Discontinued or upcoming products are not in database.',
                         color=EMBED_COLOR,
                     )
 
@@ -237,23 +253,25 @@ async def cmd_help(context, *args):
     arg = ' '.join(args)
     # searching in non-region commands first
     # so conflicting name in region commands are inaccessible
-    if arg in CMD_ALIASES.values():
-        msg = ''.join(lelnovo.command_descrs[arg])
+    if arg == 'help':
+        msg = 'haha nice try'
+    elif arg in CMD_ALIASES.values():
+        msg = ''.join(lelnovo.COMMAND_DESCRS[arg])
     elif arg in CMD_ALIASES.keys():
-        msg = ''.join(lelnovo.command_descrs[CMD_ALIASES[arg]])
+        msg = ''.join(lelnovo.COMMAND_DESCRS[CMD_ALIASES[arg]])
     elif arg in REGCMD_ALIASES.values():
-        msg = ''.join(lelnovo.command_descrs[f'reg_{arg}'])
+        msg = ''.join(lelnovo.COMMAND_DESCRS[f'reg_{arg}'])
     elif arg in REGCMD_ALIASES.keys():
-        msg = ''.join(lelnovo.command_descrs[f'reg_{REGCMD_ALIASES[arg]}'])
+        msg = ''.join(lelnovo.COMMAND_DESCRS[f'reg_{REGCMD_ALIASES[arg]}'])
     else:
-        msg = lelnovo.usage_str
+        msg = lelnovo.USAGE_STR
 
     await try_send(context, content=f'```\n{msg}```')
 
 @bot.command(name='listregions',
     aliases     = ['lr'],
-    brief       = lelnovo.command_briefs['listregions'],
-    description = lelnovo.command_descrs['listregions'],
+    brief       = lelnovo.COMMAND_BRIEFS['listregions'],
+    description = lelnovo.COMMAND_DESCRS['listregions'],
 )
 async def cmd_listregions(context):
     guild_id = context.guild.id
@@ -301,6 +319,13 @@ async def cmd_status(context):
             embed.add_field(name=db['metadata']['short region'], value=contents, inline=False)
 
     await try_send(context, embed=embed)
+
+@bot.event
+async def on_command_error(context, error):
+    if isinstance(error, discord.ext.commands.CommandNotFound):
+        print(f'Ignoring invalid command \'{context.invoked_with}\'')
+        return
+    raise error
 
 if __name__ == '__main__':
     cfg = configparser.ConfigParser()
