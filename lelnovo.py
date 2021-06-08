@@ -117,7 +117,7 @@ def search(query, db):
                                     qs_matched[i] = True
                             # spec search
                             else:
-                                if term.lower() in part[spec].lower():
+                                if spec in part and term.lower() in part[spec].lower():
                                     matches.append((spec, part[spec]))
                                     qs_matched[i] = True
                         elif q[0] == 'num_spec':
