@@ -218,7 +218,7 @@ def get_api_specs(session, pn):
     #pprint([f'{k:20} {v}' for k, v in num_specs.items()], width=187)
     return specs, num_specs
 
-def process_brand(s, brand, print_progress=False):
+def process_brand(s, brand, print_part_progress=False, print_live_progress=False):
     # returns dict with part numbers as key
     prods = {}
     # keep track of and return all keys encountered in this brand
@@ -229,7 +229,7 @@ def process_brand(s, brand, print_progress=False):
     }
 
     start = time.time()
-    if print_progress: print(brand, end='\r')
+    if print_live_progress: print(brand, end='\r')
 
     pcodes = []
     if brand == 'yoga':
@@ -249,13 +249,13 @@ def process_brand(s, brand, print_progress=False):
     for pn in set(pcodes):
         prods[pn] = []
 
-    print(f'{brand} ({len(prods)}) {time.time()-start:.1f}s')
+    if print_part_progress: print(f'{brand} ({len(prods)}) {time.time()-start:.1f}s')
 
     prod_count = 0
     cur_str = ''
     for prod, parts in prods.items():
         cur_str = f'{brand:22} ({prod_count+1:<2}/{len(prods):2}) {prod}'
-        if print_progress: print(cur_str, end='\r')
+        if print_live_progress: print(cur_str, end='\r')
         start = time.time()
 
         r = try_request(s, f'{BASE_URL}/p/{prod}')
@@ -263,7 +263,7 @@ def process_brand(s, brand, print_progress=False):
             soup = BeautifulSoup(r.content, 'html.parser')
 
             cur_str += f' {time.time()-start:.1f}s'
-            if print_progress: print(cur_str, end='\r')
+            if print_live_progress: print(cur_str, end='\r')
             start = time.time()
 
             part_count = 0
@@ -305,8 +305,8 @@ def process_brand(s, brand, print_progress=False):
                         parts.append(info)
 
                         part_count += 1
-                    if print_progress: print(f'{cur_str} {"#"*part_count}{part_count}\r', end='\r')
-            print(f'{cur_str:46} {"#"*part_count}{part_count} {time.time()-start:.1f}s')
+                    if print_live_progress: print(f'{cur_str} {"#"*part_count}{part_count}\r', end='\r')
+            if print_part_progress: print(f'{cur_str:46} {"#"*part_count}{part_count} {time.time()-start:.1f}s')
             prod_count += 1
         else:
             cur_str += ' 404!'
@@ -324,6 +324,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('region')
 parser.add_argument('region_short')
 parser.add_argument('mp_threads', type=int)
+parser.add_argument('-p', '--print_progress', action='store_true')
+parser.add_argument('-l', '--print_live_progress', action='store_true')
 args = parser.parse_args()
 
 BASE_URL = f'https://www.lenovo.com/{args.region}'
@@ -352,6 +354,7 @@ db = {
         'region':       args.region,
         'short region': args.region_short,
         'base url':     BASE_URL,
+        'changelog':    [], # TODO: track changes per scrape
     },
     # keep track of all keys encountered across all brands
     'keys': {
@@ -359,12 +362,20 @@ db = {
         #'api_specs': [], # merged into 'info'
         'num_specs': [],
     },
+    # store brand title
+    #db['data']['brands'] = {
+    #    'brand': [
+    #        ('product line num', 'product line name'), ...
+    #    ], ...
+    #}
+    'brands': {},
     'data': {}
 }
 
 start = time.time()
 
 if args.region == 'us/en/ticketsatwork':
+    print(f'Authenticating ticketsatwork...')
     passcode = 'TICKETSatWK'
     db['metadata']['passcode'] = passcode
     # authenticate with ticketsatwork
@@ -380,6 +391,7 @@ if args.region == 'us/en/ticketsatwork':
     )
 
 # collect brands from seriesListPage api call
+print(f'Collecting brands...')
 series = [
     'THINKPAD' if args.region == 'gb/en' else 'thinkpad',
     'IdeaPad',
@@ -400,27 +412,43 @@ brands.extend([
     'thinkpadyoga-2',
     'thinkpad11e',
 ] if b in brands]
-#brands = ['IdeaPad-300',]
+#brands = ['IdeaPad-300', 'legion-7-series']
+print(f'Got {len(brands)} brands')
 
-db['metadata']['brands'] = brands
-
-# return a list of tuple(brand dicts, keys)
+print(f'Scraping \'{args.region}\'...')
+# return a list of tuple(data dicts, keys)
 results = []
 if args.mp_threads <= 1:
     for brand in brands:
-        result, keys = process_brand(s, brand, True)
+        result, keys = process_brand(s, brand, args.print_progress, args.print_live_progress)
         results.append((result, keys))
 else:
     with multiprocessing.Pool(args.mp_threads) as p:
-        results = p.starmap(process_brand, zip(repeat(s), brands))
+        results = p.starmap(process_brand,
+            zip(
+                repeat(s),
+                brands,
+                repeat(args.print_progress),
+                repeat(False),
+            )
+        )
         p.terminate()
         print('Pool terminated')
         p.join()
 
-# print scrape duration
-duration_s = time.time()-start
-duration_str = f'{int(duration_s/60)}m {int(duration_s%60)}s'
-print(f'Scraped \'{args.region_short}\' in {duration_str}')
+db['data'] = dict(zip(brands, [r[0] for r in results]))
+
+# add product lines to brands
+print(f'Getting product line titles...')
+for brand, prods in db['data'].items():
+    db['brands'][brand] = []
+    for prod in prods.keys():
+        # retrieve product line name via api
+        r = try_request(s, f'{BASE_URL}/p/{prod}/specs/json')
+        if r:
+            d = json.loads(r.text)
+            db['brands'][brand].append((prod, d['name'].replace('\u201d', '"')))
+    if args.print_progress: print(brand)
 
 # merge keys
 for r in results:
@@ -430,9 +458,6 @@ for r in results:
 # remove num_specs key from info
 db['keys']['info'].remove('num_specs')
 
-db['data'] = dict(zip(brands, [r[0] for r in results]))
-db['metadata']['timestamp'] = time.time()
-
 # count and store total
 total = 0
 for r in results:
@@ -441,7 +466,18 @@ for r in results:
         total += len(parts)
 db['metadata']['total'] = total
 
+# retrieve and log changes
+# db_old = # get old db
+#db['metadata']['changelog'] = get_changes()
+
+db['metadata']['timestamp'] = time.time()
+
+# print scrape duration
+duration_s = time.time()-start
+duration_str = f'{int(duration_s/60)}m {int(duration_s%60)}s'
+print(f'Scraped in {duration_str}')
 print()
+
 #for brand, prods in db['data'].items():
 #    print(f'{brand} ({len(prods)})')
     #for prod, parts in prods.items():
@@ -460,7 +496,9 @@ print()
         #            print(f'{name+":":9} {val}')
         #    print('    ],')
 for k, v in db.items():
-    if k not in ['data']:
+    if k in ['data', 'brands']:
+        print(f'{k} [{len(v)}]')
+    else:
         print(k)
         for k1, v1 in v.items():
             print(f'  {k1:13} {v1}')

@@ -226,7 +226,7 @@ def get_status(db):
     if emoji: string += f' {emoji}'
     string += f' **{db["metadata"]["region"]}**\n'
 
-    string += f'**{db["metadata"]["total"]}** products total across **{len(db["data"].keys())}** product lines\n'
+    string += f'**{db["metadata"]["total"]}** products total across **{len(db["data"].keys())}** series\n'
     return string
 
 def get_footer(db):
