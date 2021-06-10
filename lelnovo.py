@@ -290,8 +290,8 @@ COMMAND_DESCRS = {
         f'list valid specs and num_specs for use in \'search\' and \'specs\' commands'
     ),
     'reg_search': (
-        f'usage: !lelnovo [region] search query[, query, ...]\n'
-        f'       !lelnovo [region] s      query[, query, ...]\n'
+        f'usage: !lelnovo [region] search [query[, query, ...]]\n'
+        f'       !lelnovo [region] s      [query[, query, ...]]\n'
         f'\n'
         f'{COMMAND_BRIEFS["reg_search"]}\n'
         f'\n'
@@ -309,8 +309,8 @@ COMMAND_DESCRS = {
         f'  "!lelnovo us search x1e, price<=1400, display:fhd"\n'
     ),
     'reg_specs': (
-        f'usage: !lelnovo [region] specs prodnum [spec[, spec, ...]]\n'
-        f'       !lelnovo [region] sp    prodnum [spec[, spec, ...]]\n'
+        f'usage: !lelnovo [region] specs [prodnum] [spec[, spec, ...]]\n'
+        f'       !lelnovo [region] sp    [prodnum] [spec[, spec, ...]]\n'
         f'\n'
         f'{COMMAND_BRIEFS["reg_specs"]}\n',
         f'if specs are given, filters result by the given comma-separated specs.\n'
@@ -322,7 +322,7 @@ COMMAND_DESCRS = {
     ),
 }
 USAGE_STR = (
-    f'usage: !lelnovo [region] command [parameters, ...]\n'
+    f'usage: !lelnovo [region] [command] [parameters, ...]\n'
     f'\n'
     f'commands without region:\n'
     f'  {"h|help"        :14}    show this help message\n'

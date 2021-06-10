@@ -177,6 +177,7 @@ async def on_command_error(context, error):
         if cmd in REGCMD_ALIASES.values():
             embed = discord.Embed(
                 title=f'No region specified for command `{cmd}`',
+                description=f'usage: `!lelnovo [region] search [query[, query, ...]]`\n',
                 color=EMBED_COLOR,
             )
             embed.add_field(
