@@ -66,7 +66,7 @@ def search(query, db):
             elif str(spec).lower() in SPEC_ALIASES:
                 qs.append(('spec', SPEC_ALIASES[spec], search))
             else:
-                print(f'Ignoring unhandled spec \'{spec}\' in \'{term}\'')
+                print(f'Ignoring invalid spec \'{spec}\' in \'{term}\'')
         else:
             m = re.match(r'\s?([\w ]+)([=<>]+)\s?(.*)', term) # num_spec comparison search
             if m:
@@ -81,10 +81,10 @@ def search(query, db):
                         elif spec in NUM_SPEC_ALIASES and NUM_SPEC_ALIASES[spec] in db['keys']['num_specs']:
                             qs.append(('num_spec', NUM_SPEC_ALIASES[spec], ops[op_str], num))
                         else:
-                            print(f'Ignoring unhandled num_spec \'{spec}\' in \'{term}\'')
+                            print(f'Ignoring invalid num_spec \'{spec}\' in \'{term}\'')
                     except ValueError: print(f'Ignoring invalid number \'{num}\' in \'{term}\'')
                 else:
-                    print(f'Ignoring unhandled num_spec operator \'{m.group(2)}\' in \'{term}\'')
+                    print(f'Ignoring invalid num_spec operator \'{m.group(2)}\' in \'{term}\'')
             else: # generic value search
                 qs.append(('search', term))
     #pprint(qs)
