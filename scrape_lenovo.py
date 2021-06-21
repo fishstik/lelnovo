@@ -592,7 +592,7 @@ print()
         #            print(f'{name+":":9} {val}')
         #    print('    ],')
 for k, v in db.items():
-    if k in ['data', 'brands']:
+    if k in ['data', 'brands', 'changes']:
         print(f'{k} [{len(v)}]')
     else:
         print(k)
