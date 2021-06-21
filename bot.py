@@ -312,8 +312,7 @@ def parse_command(context, args, region):
                         spacing = max([len(k[0]) for k in spec_matches])
                         for match in result[2]:
                             if match[0] not in added:
-                                spec = match[0]
-                                value = match[1]
+                                spec, value = match
                                 if spec == 'processor': value = lelnovo.cleanup_cpu(value)
                                 contents += lelnovo.multiline(f'{spec:{spacing}}  {value}', indent=spacing+2) + '\n'
                                 added.append(spec)
