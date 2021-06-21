@@ -74,12 +74,15 @@ def search(query, db):
                 op_str = m.group(2).strip()
                 num    = m.group(3).strip()
                 if op_str in ops:
-                    if spec in db['keys']['num_specs']:
-                        qs.append(('num_spec', spec, ops[op_str], num))
-                    elif spec in NUM_SPEC_ALIASES and NUM_SPEC_ALIASES[spec] in db['keys']['num_specs']:
-                        qs.append(('num_spec', NUM_SPEC_ALIASES[spec], ops[op_str], num))
-                    else:
-                        print(f'Ignoring unhandled num_spec \'{spec}\' in \'{term}\'')
+                    try:
+                        float(num)
+                        if spec in db['keys']['num_specs']:
+                            qs.append(('num_spec', spec, ops[op_str], num))
+                        elif spec in NUM_SPEC_ALIASES and NUM_SPEC_ALIASES[spec] in db['keys']['num_specs']:
+                            qs.append(('num_spec', NUM_SPEC_ALIASES[spec], ops[op_str], num))
+                        else:
+                            print(f'Ignoring unhandled num_spec \'{spec}\' in \'{term}\'')
+                    except ValueError: print(f'Ignoring invalid number \'{num}\' in \'{term}\'')
                 else:
                     print(f'Ignoring unhandled num_spec operator \'{m.group(2)}\' in \'{term}\'')
             else: # generic value search
