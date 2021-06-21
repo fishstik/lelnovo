@@ -312,7 +312,7 @@ def process_brand(s, brand, print_part_progress=False, print_live_progress=False
             if print_part_progress: print(f'{cur_str:46} {"#"*part_count}{part_count} {time.time()-start:.1f}s')
             prod_count += 1
         else:
-            cur_str += ' 404!'
+            cur_str += f' {prod} 404!'
             print(f'{cur_str:46} {time.time()-start:.1f}s')
 
     # clean up any empty prods e.g. from url redirect
