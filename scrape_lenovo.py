@@ -106,6 +106,7 @@ def get_api_specs(session, pn):
         'hard drive':                 'storage',
         'hdtype':                     'storage',
         'height_met':                 'height',
+        'integrated graphics':        'graphics',
         'longdesc_bat':               'battery',
         'maxresolution':              'display',
         'near field communication':   'nfc',
