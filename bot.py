@@ -3,7 +3,7 @@ import lelnovo
 import re
 import configparser
 import json, time
-import os, sys
+import os
 import atexit
 #from datetime import datetime,timezone,timedelta
 
@@ -365,14 +365,13 @@ def parse_command(context, args, region):
 
 if __name__ == '__main__':
     cfg = configparser.ConfigParser()
-    if not os.path.exists(CFG_FILENAME):
+    if os.path.exists(CFG_FILENAME):
+        cfg.read(CFG_FILENAME)
+        token = cfg['discord']['token']
+        if token: bot.run(token)
+        else:     print(f'Token not found in \'{CFG_FILENAME}\'')
+    else:
         cfg.add_section('discord')
         cfg.set('discord', 'token', '')
         with open(CFG_FILENAME, 'w') as cfg_file: cfg.write(cfg_file)
         print(f'Created template \'{CFG_FILENAME}\'. Add bot token and restart.')
-        sys.exit()
-
-    cfg.read(CFG_FILENAME)
-    token = cfg['discord']['token']
-    if token: bot.run(token)
-    else:     print(f'Token not found in \'{CFG_FILENAME}\'')
