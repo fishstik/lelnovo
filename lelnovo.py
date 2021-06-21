@@ -193,6 +193,7 @@ def format_specs(db, info, specs):
             if spec == 'num_specs': # save num_specs sub-dict for later
                 num_specs = specs[spec]
             else: # add regular specs
+                if spec == 'processor': value = cleanup_cpu(value)
                 line = f'{spec:>{spacing}}  {value}'
                 contents += f'{multiline(line, indent=spacing+2)}\n'
 
@@ -212,6 +213,53 @@ def format_specs(db, info, specs):
     else: contents += f'`[no valid specs to list]`\n'
 
     return contents
+
+# level 0: Intel Core i5-1135G7, AMD Ryzen 5 4500U
+# level 1:       Core i5-1135G7,     Ryzen 5 4500U
+# level 2:            i5-1135G7,             4500U
+def cleanup_cpu(cpu, level=0):
+    m = re.search(r'((?:Intel|AMD|Qualcomm).*) Processor', cpu)
+    if m: cpu = m.group(1)
+    cpu = re.sub(r'\s+\(.*\)', '', cpu)
+    cpu = re.sub(r'\S+\s+\S+\s+Gen(eration)?\s?', '', cpu)
+    cpu = re.sub(r'IntelCore', 'Intel Core', cpu)
+    cpu = re.sub(r'Core Intel', 'Core', cpu)
+    cpu = re.sub(r'(i\d)\s+\1', r'\1', cpu) # i5 i5-XXXX
+    if level >= 1:
+        cpu = re.sub('(Intel|AMD|Qualcomm)\s+', '' , cpu)
+    if level >= 2:
+        cpu = re.sub('(Core\s+|Xeon\s+|Ryzen\s+\d+\s+)(Pro\s+)?', '' , cpu)
+    return cpu
+
+# level 0: Intel Iris Xe, NVIDIA RTX 2070 Max-Q
+# level 1:       Iris Xe,        RTX 2070 Max-Q
+# level 2:       Iris Xe,            2070 MQ
+def cleanup_gpu(gpu, level=0):
+    m = re.search(r'((?:Intel|AMD|Qualcomm).*) Graphics', gpu)
+    if m: gpu = m.group(1)
+    tmp = []
+    for word in [w for w in re.split(r'\s+', gpu) if w.lower() not in [
+        'geforce',
+        'discrete',
+        'integrated',
+        'with',
+        'other',
+        'graphics',
+        't',
+        'series',
+    ]]:
+        tmp.append(word)
+    gpu = ' '.join(tmp)
+    gpu = re.sub(r'\s?\d+GB', '', gpu)
+    gpu = re.sub(r'\s?\d+bits', '', gpu)
+    gpu = re.sub(r'\s?GDDR\d+', '', gpu)
+    if level >= 1:
+        gpu = re.sub('(Intel|AMD|NVIDIA|Qualcomm)\s+', '' , gpu)
+    if level >= 2:
+        gpu = re.sub('\s?Super', 'S' , gpu)
+        gpu = re.sub('Max-?Q', 'MQ' , gpu)
+        gpu = re.sub('[RG]TX\s?', '' , gpu)
+    return gpu
 
 def get_region_emoji(region_short):
     if region_short in REGION_EMOJIS:
