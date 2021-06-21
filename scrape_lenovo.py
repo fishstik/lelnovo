@@ -132,6 +132,7 @@ def get_api_specs(session, pn):
         'depth_met':         ('report usage',             r'([\d\.]+).*mm',   float, 'mm', ['depth']),
         'height_met':        ('report usage',             r'([\d\.]+) ?mm',   float, 'mm', ['thickness']),
         'hard drive':        ('facet features mtmcto',    r'(\d+) ?GB',       int,   'GB', ['storage']),
+        'hard drive':        ('facet features mtmcto',    r'(\d+) ?TB',       int,   'TB', ['storage']),
         'memory':            ('facet features mtmcto',    r'([\d\.]+) ?GB',   float, 'GB', ['memory']),
         'num_cores':         ('report usage',             r'(\d+)',           int,   '',   ['cpu cores']),
         'screen resolution': ('facet features mtmcto',    r'(\d+) ?x ?(\d+)', int,   'px', ['display res horizontal', 'display res vertical']),
@@ -212,6 +213,7 @@ def get_api_specs(session, pn):
             ))),
             'ppi'
         )
+
     #print(pn)
     #pprint([f'{f[2]:30} {f[0]:30} {f[1]}' for f in sorted(all_specs, key = lambda x: x[0])], width=187)
     #pprint([f'{k:20} {v}' for k, v in specs.items()], width=187)
@@ -320,6 +322,95 @@ def process_brand(s, brand, print_part_progress=False, print_live_progress=False
 
     return prods, keys
 
+#returns changes = {
+#    'timestamp_old' = ts,
+#    'added':   { 'brand': { 'prodn': ('prod', [part_d, ... ]), ... }, ... },
+#    'removed': { 'brand': { 'prodn': ('prod', [part_d, ... ]), ... }, ... },
+#    'changed': { 'brand': { 'prodn': ('prod', [(part_d, [ {'spec': str, 'is_num_spec': bool, 'before': str, 'after': str}, ... ], ... ), ... ]) }, ... }
+#}
+def get_changes(db_new, db_old):
+    added = {}
+    removed = {}
+    changed = {}
+    # check for additions
+    for brand, prods in db_new['data'].items():
+        for prodn, parts in prods.items():
+            # keep copy of parts, remove if found in old db_new
+            new_parts = list(parts)
+            if brand in db_old['data'] and prodn in [p[0] for p in db_old['brands'][brand]]:
+                for part in parts:
+                    for part_old in db_old['data'][brand][prodn]:
+                        if part_old['part number'] == part['part number']:
+                            new_parts.remove(part)
+                # add new_parts list to added dict
+                if new_parts:
+                    if brand not in added: added[brand] = {}
+                    if prodn not in added[brand]: added[brand][prodn] = ([v[1] for v in db_new["brands"][brand] if v[0] == prodn][0], [])
+                    added[brand][prodn][1].extend(new_parts)
+            else: # new brand or prodn, count all
+                if brand not in added: added[brand] = {}
+                if prodn not in added[brand]: added[brand][prodn] = ([v[1] for v in db_new["brands"][brand] if v[0] == prodn][0], [])
+                added[brand][prodn][1].extend(new_parts)
+    # check for removals
+    for brand, prods in db_old['data'].items():
+        for prodn, parts in prods.items():
+            # keep copy of parts, remove if found in old db
+            removed_parts = list(parts)
+            if brand in db_new['data'] and prodn in [p[0] for p in db_new['brands'][brand]]:
+                for part in parts:
+                    for part_new in db_new['data'][brand][prodn]:
+                        if part_new['part number'] == part['part number']:
+                            removed_parts.remove(part)
+                # add removed_parts list to added dict
+                if removed_parts:
+                    if brand not in removed: removed[brand] = {}
+                    if prodn not in removed[brand]: removed[brand][prodn] = ([v[1] for v in db_old["brands"][brand] if v[0] == prodn][0], [])
+                    removed[brand][prodn][1].extend(removed_parts)
+            else: # entire brand or prodn removed, count all
+                if brand not in removed: removed[brand] = {}
+                if prodn not in removed[brand]: removed[brand][prodn] = ([v[1] for v in db_old["brands"][brand] if v[0] == prodn][0], [])
+                removed[brand][prodn][1].extend(removed_parts)
+    # check for changes
+    for brand, prods in db_new['data'].items():
+        for prodn, parts in prods.items():
+            if brand in db_old['data'] and prodn in [p[0] for p in db_old['brands'][brand]]:
+                for part in parts:
+                    if part['part number'] in [p['part number'] for p in db_old['data'][brand][prodn]]:
+                        changed_specs = []
+                        part_old = [p for p in db_old['data'][brand][prodn] if p['part number'] == part['part number']][0]
+                        for spec, v in part.items():
+                            if spec == 'num_specs':
+                                for num_spec, new_v in v.items():
+                                    if num_spec in part_old['num_specs']:
+                                        old_v = part_old['num_specs'][num_spec]
+                                        if tuple(new_v) != tuple(old_v): changed_specs.append({
+                                            'spec': num_spec,
+                                            'is_num_spec': True,
+                                            'before': old_v,
+                                            'after': new_v,
+                                        })
+                            else:
+                                old_v = part_old[spec] if spec in part_old else ''
+                                if v != old_v: changed_specs.append({
+                                    'spec': spec,
+                                    'is_num_spec': False,
+                                    'before': old_v,
+                                    'after': v,
+                                })
+                        if changed_specs:
+                            if brand not in changed: changed[brand] = {}
+                            if prodn not in changed[brand]: changed[brand][prodn] = ([v[1] for v in db_new["brands"][brand] if v[0] == prodn][0], [])
+                            changed[brand][prodn][1].append((part, changed_specs))
+
+    #pprint(removed, width=125)
+    changes = {
+        'timestamp_old': db_old['metadata']['timestamp'],
+        'added': added,
+        'removed': removed,
+        'changed': changed,
+    }
+    return changes
+
 parser = argparse.ArgumentParser()
 parser.add_argument('region')
 parser.add_argument('region_short')
@@ -354,16 +445,16 @@ db = {
         'region':       args.region,
         'short region': args.region_short,
         'base url':     BASE_URL,
-        'changelog':    [], # TODO: track changes per scrape
     },
+    # track changes per scrape
+    'changes': {},
     # keep track of all keys encountered across all brands
     'keys': {
         'info': [],
         #'api_specs': [], # merged into 'info'
         'num_specs': [],
     },
-    # store brand title
-    #db['data']['brands'] = {
+    #{
     #    'brand': [
     #        ('product line num', 'product line name'), ...
     #    ], ...
@@ -466,11 +557,15 @@ for r in results:
         total += len(parts)
 db['metadata']['total'] = total
 
-# retrieve and log changes
-# db_old = # get old db
-#db['metadata']['changelog'] = get_changes()
-
 db['metadata']['timestamp'] = time.time()
+
+# retrieve and log changes
+if os.path.exists(f'{DB_DIR}/{DB_FILENAME}'):
+    with open(f'{DB_DIR}/{DB_FILENAME}', 'r') as f:
+        js = f.read()
+        db_old = json.loads(js)
+        print(f'Found existing \'{DB_DIR}/{DB_FILENAME}\'')
+    db['changes'] = get_changes(db, db_old)
 
 # print scrape duration
 duration_s = time.time()-start
