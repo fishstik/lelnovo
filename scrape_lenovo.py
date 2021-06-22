@@ -315,12 +315,6 @@ def process_brand(s, brand, print_part_progress=False, print_live_progress=False
             cur_str += f' {prod} 404!'
             print(f'{cur_str:46} {time.time()-start:.1f}s')
 
-    # clean up any empty prods e.g. from url redirect
-    #new_prods = {}
-    #for prod, parts in prods.items():
-    #    print(parts)
-    #    if parts: new_prods[prod] = parts
-
     return prods, keys
 
 #returns changes = {
@@ -504,7 +498,7 @@ brands.extend([
     'thinkpadyoga-2',
     'thinkpad11e',
 ] if b in brands]
-#brands = ['IdeaPad-300', 'legion-7-series']
+#brands = ['ideapad-s-series', 'IdeaPad-300', 'legion-7-series', 'ideapad-gaming-laptops']
 print(f'Got {len(brands)} brands')
 
 print(f'Scraping \'{args.region}\'...')
@@ -529,6 +523,25 @@ else:
         p.join()
 
 db['data'] = dict(zip(brands, [r[0] for r in results]))
+
+# cleanup any empty brands/prodlines
+empty_brands = []
+empty_prodnums = {}
+for brand, prods in db['data'].items():
+    if prods == {'': []}:
+        empty_brands.append(brand)
+    # check for empty product lines
+    for prodnum, parts in prods.items():
+        if parts == []:
+            if brand not in empty_prodnums: empty_prodnums[brand] = []
+            empty_prodnums[brand].append(prodnum)
+for empty_brand in empty_brands:
+    print(f'\'{empty_brand}\' is empty. Deleting...')
+    del db['data'][empty_brand]
+for brand, prodnums in empty_prodnums.items():
+    for prodnum in prodnums:
+        print(f'\'{brand} - {prodnum}\' is empty. Deleting...')
+        del db['data'][brand][prodnum]
 
 # add product lines to brands
 print(f'Getting product line titles...')
