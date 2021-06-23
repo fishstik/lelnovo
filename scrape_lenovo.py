@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 from itertools import repeat
 from collections import namedtuple
 from html2text import html2text
-from pprint import pprint
+from pprint import pprint, pformat
 
 def try_request(s, url, wait_s=1):
     while True:
@@ -587,29 +587,6 @@ if os.path.exists(f'{DB_DIR}/{DB_FILENAME}'):
         print(f'Found existing \'{DB_DIR}/{DB_FILENAME}\'')
     db['changes'] = get_changes(db, db_old)
 
-# print scrape duration
-duration_s = time.time()-start
-duration_str = f'{int(duration_s/60)}m {int(duration_s%60)}s'
-print(f'Scraped in {duration_str}')
-print()
-
-#for brand, prods in db['data'].items():
-#    print(f'{brand} ({len(prods)})')
-    #for prod, parts in prods.items():
-    #    print(f'  {prod} ({len(parts)})')
-        #for part in parts:
-        #    first = True
-        #    for name, val in part.items():
-        #        if name in ['specs', 'api_specs', 'num_specs']:
-        #            print(f'      {name+":":9}')
-        #            for spec, val in val.items():
-        #                print(f'        {spec+":":28} {val}')
-        #        else:
-        #            if first: print('    [ ', end='')
-        #            else:     print('      ', end='')
-        #            first = False
-        #            print(f'{name+":":9} {val}')
-        #    print('    ],')
 for k, v in db.items():
     if k in ['data', 'brands', 'changes']:
         print(f'{k} [{len(v)}]')
@@ -617,6 +594,16 @@ for k, v in db.items():
         print(k)
         for k1, v1 in v.items():
             print(f'  {k1:13} {v1}')
+    #if k in ['data']:
+    #    print(k)
+    #    for k1, v1 in v.items():
+    #        print(f'  {k1:13} {pformat(v1)}')
+print()
+
+# print scrape duration
+duration_s = time.time()-start
+duration_str = f'{int(duration_s/60)}m {int(duration_s%60)}s'
+print(f'Scraped in {duration_str}')
 
 if not os.path.exists(DB_DIR):
     os.makedirs(DB_DIR)
