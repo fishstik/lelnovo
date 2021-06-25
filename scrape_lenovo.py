@@ -10,6 +10,7 @@ import os
 from bs4 import BeautifulSoup
 from itertools import repeat
 from collections import namedtuple
+from datetime import datetime
 from html2text import html2text
 from pprint import pprint, pformat
 
@@ -586,6 +587,11 @@ if os.path.exists(f'{DB_DIR}/{DB_FILENAME}'):
         db_old = json.loads(js)
         print(f'Found existing \'{DB_DIR}/{DB_FILENAME}\'')
     db['changes'] = get_changes(db, db_old)
+    # backup old json file
+    if not os.path.exists(f'{DB_DIR}/backup'): os.makedirs(f'{DB_DIR}/backup')
+    new_filename = f'db_{args.region_short}_{datetime.fromtimestamp(db_old["metadata"]["timestamp"]).strftime("%m%d")}.json'
+    os.rename(f'{DB_DIR}/{DB_FILENAME}', f'{DB_DIR}/backup/{new_filename}')
+    print(f'Backed up \'{DB_DIR}/{DB_FILENAME}\' to \'{DB_DIR}/{new_filename}\'')
 
 for k, v in db.items():
     if k in ['data', 'brands', 'changes']:
@@ -605,8 +611,7 @@ duration_s = time.time()-start
 duration_str = f'{int(duration_s/60)}m {int(duration_s%60)}s'
 print(f'Scraped in {duration_str}')
 
-if not os.path.exists(DB_DIR):
-    os.makedirs(DB_DIR)
+if not os.path.exists(DB_DIR): os.makedirs(DB_DIR)
 with open(f'{DB_DIR}/{DB_FILENAME}', 'w') as f:
     json.dump(db, f)
     print(f'Wrote to \'{DB_DIR}/{DB_FILENAME}\' on {time.strftime("%c")}')

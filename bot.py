@@ -5,7 +5,7 @@ import configparser
 import json, time
 import os
 import atexit
-#from datetime import datetime,timezone,timedelta
+from datetime import datetime
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -177,7 +177,7 @@ async def on_command_error(context, error):
         if cmd in REGCMD_ALIASES.values():
             embed = discord.Embed(
                 title=f'No region specified for command `{cmd}`',
-                description=f'usage: `!lelnovo [region] search [query[, query, ...]]`\n',
+                description=f'usage: `!lelnovo [region] [command] [parameters, ...]`\n',
                 color=EMBED_COLOR,
             )
             embed.add_field(
@@ -358,8 +358,28 @@ def parse_command(context, args, region):
                     )
 
                 embed.set_footer(text = lelnovo.get_footer(db))
-        else:
-            print(f'Unrecognized command \'{" ".join(args)}\'')
+        elif command in ['changes', 'ch']:
+            old_dt = datetime.utcfromtimestamp(db['changes']['timestamp_old'])
+            embed = discord.Embed(
+                title=f'{region_emoji} Changes since {old_dt.strftime("%a %b %d")} ({lelnovo.pretty_duration((datetime.utcnow() - old_dt).total_seconds())} ago)',
+                #description='',
+                color=EMBED_COLOR,
+            )
+
+            change_contents = lelnovo.format_changes(db['changes'])
+            for k, v in change_contents.items():
+                if k in ['added', 'removed']:
+                    contents = ''
+                    for prod, parts in v.items():
+                        contents += f'{prod}\n'
+                        contents += '\n'.join(parts)
+                        contents += '\n' if parts else ''
+                    embed.add_field(name=k.capitalize(), value=contents, inline=False)
+                elif k == 'changed':
+                    contents = '\n'.join(v)
+                    embed.add_field(name=k.capitalize(), value=contents, inline=False)
+
+            embed.set_footer(text = lelnovo.get_footer(db))
 
     return embed
 
