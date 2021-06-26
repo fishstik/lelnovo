@@ -402,6 +402,101 @@ def get_dbs(dir):
                 dbs[db['metadata']['short region']] = db
     return dbs
 
+def get_usage_str(prefix):
+    return (
+        f'usage: {prefix} [region] [command] [parameters, ...]\n'
+        f'\n'
+        f'commands without region:\n'
+        f'  {"h|help"        :14}    show this help message\n'
+        f'  {"h|help command":14}    show help for command\n'
+        f'  {"lr|listregions":14}    {COMMAND_BRIEFS["listregions"]}\n'
+        f'  {"st|status"     :14}    {COMMAND_BRIEFS["status"]}\n'
+        f'\n'
+        f'commands with region:\n'
+        f'  {"st|status"     :14}    {COMMAND_BRIEFS["reg_status"]}\n'
+        f'  {"ls|listspecs"  :14}    {COMMAND_BRIEFS["reg_listspecs"]}\n'
+        f'  {"s|search query[, query, ...]"}\n'
+        f'  {" "             :14}    {COMMAND_BRIEFS["reg_search"]}\n'
+        f'  {"sp|specs prodnum [spec[, spec, ...]]"}\n'
+        f'  {" "             :14}    {COMMAND_BRIEFS["reg_specs"]}\n'
+        f'\n'
+        f'examples:\n'
+        f'  "{prefix} listregions"\n'
+        f'  "{prefix} help search"\n'
+        f'  "{prefix} us status"\n'
+        f'  "{prefix} us search x1e, price<=1400, display:fhd"\n'
+        f'  "{prefix} us specs 20TK001EUS"\n'
+        f'  "{prefix} us specs 20TK001EUS price, display, memory"\n'
+    )
+
+def get_command_descr(cmd, prefix):
+    if cmd == 'listregions':
+        ret_str = (
+            f'usage: {prefix} listregions\n'
+            f'       {prefix} lr\n'
+            f'\n'
+            f'{COMMAND_BRIEFS["listregions"]}'
+        )
+    elif cmd == 'status':
+        ret_str = (
+            f'usage: {prefix} status\n'
+            f'       {prefix} st\n'
+            f'\n'
+            f'{COMMAND_BRIEFS["status"]}'
+            # add reg_status help since it's inaccessible
+            f'\n'
+            f'\n'
+            f'usage: {prefix} [region] status\n'
+            f'       {prefix} [region] st\n'
+            f'\n'
+            f'{COMMAND_BRIEFS["reg_status"]}'
+        )
+    elif cmd == 'reg_status':
+        ret_str = COMMAND_BRIEFS['reg_status'] # inaccessible
+    elif cmd == 'reg_listspecs':
+        ret_str = (
+            f'usage: {prefix} [region] listspecs\n'
+            f'       {prefix} [region] ls\n'
+            f'\n'
+            f'list valid specs and num_specs for use in \'search\' and \'specs\' commands'
+        )
+    elif cmd == 'reg_search':
+        ret_str = (
+            f'usage: {prefix} [region] search [query[, query, ...]]\n'
+            f'       {prefix} [region] s      [query[, query, ...]]\n'
+            f'\n'
+            f'{COMMAND_BRIEFS["reg_search"]}\n'
+            f'\n'
+            f'valid queries:\n'
+            f'  term            searches for term in any field\n'
+            f'  spec:[term]     searches for term in spec\n'
+            f'                  leave term blank to always list spec in results\n'
+            f'                  use \'listspecs\' region command to view valid specs\n'
+            f'  num_spec<[num]  searches for num_spec that satisfies the condition \'< num\'\n'
+            f'                  leave num blank to always list num_spec in results\n'
+            f'                  valid operators are <,<=,==,!=,=>,>\n'
+            f'                  use \'listspecs\' region command to view valid num_specs.\n'
+            f'\n'
+            f'example:\n'
+            f'  "{prefix} us search x1e, price<=1400, display:fhd"\n'
+        )
+    elif cmd == 'reg_specs':
+        ret_str = (
+            f'usage: {prefix} [region] specs [prodnum] [spec[, spec, ...]]\n'
+            f'       {prefix} [region] sp    [prodnum] [spec[, spec, ...]]\n'
+            f'\n'
+            f'{COMMAND_BRIEFS["reg_specs"]}\n',
+            f'if specs are given, filters result by the given comma-separated specs.\n'
+            f'use \'listspecs\' to view valid specs.\n'
+            f'\n'
+            f'examples:\n'
+            f'  "{prefix} us specs 20TK001EUS"\n'
+            f'  "{prefix} us specs 20TK001EUS price, display, memory"\n'
+        )
+    else:
+        ret_str = ''
+    return ret_str
+
 COMMAND_BRIEFS = {
     'listregions':   'list all available regions',
     'status':        'display status for all available databases',
@@ -410,90 +505,7 @@ COMMAND_BRIEFS = {
     'reg_search':    'search for products with queries separated by commas',
     'reg_specs':     'list specs for a given product number',
 }
-COMMAND_DESCRS = {
-    'listregions': (
-        f'usage: !lelnovo listregions\n'
-        f'       !lelnovo lr\n'
-        f'\n'
-        f'{COMMAND_BRIEFS["listregions"]}'
-    ),
-    'status': (
-        f'usage: !lelnovo status\n'
-        f'       !lelnovo st\n'
-        f'\n'
-        f'{COMMAND_BRIEFS["status"]}'
-        # add reg_status help since it's inaccessible
-        f'\n'
-        f'\n'
-        f'usage: !lelnovo [region] status\n'
-        f'       !lelnovo [region] st\n'
-        f'\n'
-        f'{COMMAND_BRIEFS["reg_status"]}'
-    ),
-    'reg_status':  COMMAND_BRIEFS['reg_status'], # inaccessible
-    'reg_listspecs': (
-        f'usage: !lelnovo [region] listspecs\n'
-        f'       !lelnovo [region] ls\n'
-        f'\n'
-        f'list valid specs and num_specs for use in \'search\' and \'specs\' commands'
-    ),
-    'reg_search': (
-        f'usage: !lelnovo [region] search [query[, query, ...]]\n'
-        f'       !lelnovo [region] s      [query[, query, ...]]\n'
-        f'\n'
-        f'{COMMAND_BRIEFS["reg_search"]}\n'
-        f'\n'
-        f'valid queries:\n'
-        f'  term            searches for term in any field\n'
-        f'  spec:[term]     searches for term in spec\n'
-        f'                  leave term blank to always list spec in results\n'
-        f'                  use \'listspecs\' region command to view valid specs\n'
-        f'  num_spec<[num]  searches for num_spec that satisfies the condition \'< num\'\n'
-        f'                  leave num blank to always list num_spec in results\n'
-        f'                  valid operators are <,<=,==,!=,=>,>\n'
-        f'                  use \'listspecs\' region command to view valid num_specs.\n'
-        f'\n'
-        f'example:\n'
-        f'  "!lelnovo us search x1e, price<=1400, display:fhd"\n'
-    ),
-    'reg_specs': (
-        f'usage: !lelnovo [region] specs [prodnum] [spec[, spec, ...]]\n'
-        f'       !lelnovo [region] sp    [prodnum] [spec[, spec, ...]]\n'
-        f'\n'
-        f'{COMMAND_BRIEFS["reg_specs"]}\n',
-        f'if specs are given, filters result by the given comma-separated specs.\n'
-        f'use \'listspecs\' to view valid specs.\n'
-        f'\n'
-        f'examples:\n'
-        f'  "!lelnovo us specs 20TK001EUS"\n'
-        f'  "!lelnovo us specs 20TK001EUS price, display, memory"\n'
-    ),
-}
-USAGE_STR = (
-    f'usage: !lelnovo [region] [command] [parameters, ...]\n'
-    f'\n'
-    f'commands without region:\n'
-    f'  {"h|help"        :14}    show this help message\n'
-    f'  {"h|help command":14}    show help for command\n'
-    f'  {"lr|listregions":14}    {COMMAND_BRIEFS["listregions"]}\n'
-    f'  {"st|status"     :14}    {COMMAND_BRIEFS["status"]}\n'
-    f'\n'
-    f'commands with region:\n'
-    f'  {"st|status"     :14}    {COMMAND_BRIEFS["reg_status"]}\n'
-    f'  {"ls|listspecs"  :14}    {COMMAND_BRIEFS["reg_listspecs"]}\n'
-    f'  {"s|search query[, query, ...]"}\n'
-    f'  {" "             :14}    {COMMAND_BRIEFS["reg_search"]}\n'
-    f'  {"sp|specs prodnum [spec[, spec, ...]]"}\n'
-    f'  {" "             :14}    {COMMAND_BRIEFS["reg_specs"]}\n'
-    f'\n'
-    f'examples:\n'
-    f'  "!lelnovo listregions"\n'
-    f'  "!lelnovo help search"\n'
-    f'  "!lelnovo us status"\n'
-    f'  "!lelnovo us search x1e, price<=1400, display:fhd"\n'
-    f'  "!lelnovo us specs 20TK001EUS"\n'
-    f'  "!lelnovo us specs 20TK001EUS price, display, memory"\n'
-)
+
 REGION_EMOJIS = {
     'us':  ':flag_us:',
     'tck': ':tickets:',
