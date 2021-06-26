@@ -206,7 +206,7 @@ async def on_command_error(context, error):
 
 async def try_send(context, content=None, embed=None):
     try:
-        await context.reply(content=content, embed=embed)
+        await context.send(content=content, embed=embed)
     except discord.errors.Forbidden:
         print(f'No permission to send to server \'{context.guild}\': \'#{context.channel}\'')
 
