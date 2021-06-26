@@ -417,6 +417,7 @@ def get_usage_str(prefix):
         f'commands with region:\n'
         f'  {"st|status"     :14}    {COMMAND_BRIEFS["reg_status"]}\n'
         f'  {"ls|listspecs"  :14}    {COMMAND_BRIEFS["reg_listspecs"]}\n'
+        f'  {"ch|changes  "  :14}    {COMMAND_BRIEFS["reg_changes"]}\n'
         f'  {"s|search query[, query, ...]"}\n'
         f'  {" "             :14}    {COMMAND_BRIEFS["reg_search"]}\n'
         f'  {"sp|specs prodnum [spec[, spec, ...]]"}\n'
@@ -462,6 +463,13 @@ def get_command_descr(cmd, prefix):
             f'\n'
             f'list valid specs and num_specs for use in \'search\' and \'specs\' commands'
         )
+    elif cmd == 'reg_changes':
+        ret_str = (
+            f'usage: {prefix} [region] changes\n'
+            f'       {prefix} [region] ch\n'
+            f'\n'
+            f'show additions, removals, and price changes since previous database update'
+        )
     elif cmd == 'reg_search':
         ret_str = (
             f'usage: {prefix} [region] search [query[, query, ...]]\n'
@@ -503,6 +511,7 @@ COMMAND_BRIEFS = {
     'listregions':   'list all available regions',
     'status':        'display status for all available databases',
     'reg_status':    'display region\'s database status',
+    'reg_changes':   'show changes compared to previous update',
     'reg_listspecs': 'list valid specs and num_specs',
     'reg_search':    'search for products with queries separated by commas',
     'reg_specs':     'list specs for a given product number',

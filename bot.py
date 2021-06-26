@@ -50,6 +50,7 @@ CMD_ALIASES = {
 REGCMD_ALIASES = {
     'st': 'status',
     'ls': 'listspecs',
+    'ch': 'changes',
     's':  'search',
     'sp': 'specs',
 }
@@ -317,14 +318,14 @@ def parse_command(context, args, region):
         db = DBS[region]
         region_emoji = lelnovo.get_region_emoji(db['metadata']['short region'])
 
-        if command in ['status', 'st']:
+        if command in ['st', REGCMD_ALIASES['st']]:
             embed = discord.Embed(
                 title='Database Status',
                 description=lelnovo.get_status(db),
                 color=EMBED_COLOR,
             )
             embed.set_footer(text = lelnovo.get_footer(db))
-        elif command in ['listspecs', 'ls']:
+        elif command in ['ls', REGCMD_ALIASES['ls']]:
             embed = discord.Embed(
                 title=f'{region_emoji} Specs List',
                 description='All specs that can be used in `search` and `specs` commands\n',
@@ -364,7 +365,48 @@ def parse_command(context, args, region):
             embed.add_field(name='number specs', value=contents, inline=False)
 
             embed.set_footer(text = lelnovo.get_footer(db))
-        elif command in ['search', 's']:
+        elif command in ['ch', REGCMD_ALIASES['ch']]:
+            change_contents = lelnovo.format_changes(db['changes'], db['metadata']['base url'])
+            contents = ''
+            for k, v in change_contents.items():
+                cutoff_msg = f'*...and xx more. use* `changes {k}` *to view all*'
+                if k in ['added', 'removed'] and v:
+                    #contents = ''
+                    contents += f'\n__{k.capitalize()}__\n'
+                    count = 0
+                    for prod, parts in v.items():
+                        new_contents = f'{prod}\n'
+                        #if len(contents+new_contents)+len('\n'.join(parts)) < 1024-len(cutoff_msg):
+                        contents += new_contents
+                        contents += '\n'.join(parts)
+                        if parts: contents += '\n'
+                        count += 1
+                        #else:
+                        #    contents += cutoff_msg.replace('xx', f'{len(v)-count:2}')
+                        #    break
+                    contents += '\n'
+                    #embed.add_field(name=k.capitalize(), value=contents, inline=False)
+                if k == 'changed' and v:
+                    #contents = ''
+                    contents += f'\n__{k.capitalize()}__\n'
+                    for i in range(len(v)):
+                        new_contents = f'{v[i]}\n'
+                        #if len(contents+new_contents) < 1024-len(cutoff_msg):
+                        contents += new_contents
+                        #else:
+                        #    contents += cutoff_msg.replace('xx', f'{len(v)-i:2}')
+                        #    break
+                    contents += '\n'
+                    #embed.add_field(name=k.capitalize(), value=contents, inline=False)
+
+            old_dt = datetime.utcfromtimestamp(db['changes']['timestamp_old'])
+            embed = discord.Embed(
+                title=f'{region_emoji} Changes since {old_dt.strftime("%a %b %d")} ({lelnovo.pretty_duration((datetime.utcnow() - old_dt).total_seconds())} ago)',
+                description=contents,
+                color=EMBED_COLOR,
+            )
+            embed.set_footer(text = lelnovo.get_footer(db))
+        elif command in ['s', REGCMD_ALIASES['s']]:
             params = ' '.join(params).strip(',')
             if params:
                 summary = ''
@@ -423,7 +465,7 @@ def parse_command(context, args, region):
                         value = summary,
                     )
                 embed.set_footer(text = lelnovo.get_footer(db))
-        elif command in ['specs', 'sp']:
+        elif command in ['sp', REGCMD_ALIASES['sp']]:
             params = ' '.join(params)
             if params:
                 specs = []
@@ -448,47 +490,6 @@ def parse_command(context, args, region):
                     )
 
                 embed.set_footer(text = lelnovo.get_footer(db))
-        elif command in ['changes', 'ch']:
-            change_contents = lelnovo.format_changes(db['changes'], db['metadata']['base url'])
-            contents = ''
-            for k, v in change_contents.items():
-                cutoff_msg = f'*...and xx more. use* `changes {k}` *to view all*'
-                if k in ['added', 'removed'] and v:
-                    #contents = ''
-                    contents += f'\n__{k.capitalize()}__\n'
-                    count = 0
-                    for prod, parts in v.items():
-                        new_contents = f'{prod}\n'
-                        #if len(contents+new_contents)+len('\n'.join(parts)) < 1024-len(cutoff_msg):
-                        contents += new_contents
-                        contents += '\n'.join(parts)
-                        if parts: contents += '\n'
-                        count += 1
-                        #else:
-                        #    contents += cutoff_msg.replace('xx', f'{len(v)-count:2}')
-                        #    break
-                    contents += '\n'
-                    #embed.add_field(name=k.capitalize(), value=contents, inline=False)
-                if k == 'changed' and v:
-                    #contents = ''
-                    contents += f'\n__{k.capitalize()}__\n'
-                    for i in range(len(v)):
-                        new_contents = f'{v[i]}\n'
-                        #if len(contents+new_contents) < 1024-len(cutoff_msg):
-                        contents += new_contents
-                        #else:
-                        #    contents += cutoff_msg.replace('xx', f'{len(v)-i:2}')
-                        #    break
-                    contents += '\n'
-                    #embed.add_field(name=k.capitalize(), value=contents, inline=False)
-
-            old_dt = datetime.utcfromtimestamp(db['changes']['timestamp_old'])
-            embed = discord.Embed(
-                title=f'{region_emoji} Changes since {old_dt.strftime("%a %b %d")} ({lelnovo.pretty_duration((datetime.utcnow() - old_dt).total_seconds())} ago)',
-                description=contents,
-                color=EMBED_COLOR,
-            )
-            embed.set_footer(text = lelnovo.get_footer(db))
 
     return embed
 
