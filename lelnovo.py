@@ -239,7 +239,7 @@ def format_changes(changes, base_url=None):
                     ret_contents[k][header] = []
                     for i in range(len(prodname_ps[1])):
                         p = prodname_ps[1][i]
-                        ret_contents[k][header].append(part_listentry(p, base_url))
+                        ret_contents[k][header].append(part_listentry(p, base_url if k == 'added' else None))
         elif k == 'changed':
             avgs = []
             for brand, prod in v.items():
