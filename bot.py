@@ -11,8 +11,9 @@ from datetime import datetime
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from discord.ext import commands
 import discord
+from discord.ext import commands
+from disputils import BotEmbedPaginator
 
 def exit():
     print('Exiting...')
@@ -39,6 +40,7 @@ DISABLED_REGIONS = {
     #851248442864173057: ['tck'], # lbt2
     361360173530480640: ['tck', 'epp'], # SAL
 }
+# TODO: add ability to save region per user for ls,s,sp,ch
 
 CMD_ALIASES = {
     'h': 'help',
@@ -78,27 +80,27 @@ class FileHandler(FileSystemEventHandler):
 @BOT.command()
 async def us(context, *args):
     embed = parse_command(context, args, region='us')
-    if embed: await try_send(context, embed=embed)
+    if embed: await try_send_paginated(context, embed)
 
 @BOT.command()
 async def tck(context, *args):
     embed = parse_command(context, args, region='tck')
-    if embed: await try_send(context, embed=embed)
+    if embed: await try_send_paginated(context, embed)
 
 @BOT.command()
 async def ca(context, *args):
     embed = parse_command(context, args, region='ca')
-    if embed: await try_send(context, embed=embed)
+    if embed: await try_send_paginated(context, embed)
 
 @BOT.command()
 async def epp(context, *args):
     embed = parse_command(context, args, region='epp')
-    if embed: await try_send(context, embed=embed)
+    if embed: await try_send_paginated(context, embed)
 
 @BOT.command()
 async def gb(context, *args):
     embed = parse_command(context, args, region='gb')
-    if embed: await try_send(context, embed=embed)
+    if embed: await try_send_paginated(context, embed)
 
 ### end region commands ###
 
@@ -208,6 +210,88 @@ async def try_send(context, content=None, embed=None):
     except discord.errors.Forbidden:
         print(f'No permission to send to server \'{context.guild}\': \'#{context.channel}\'')
 
+async def try_send_paginated(context, embed, limit=2048):
+    msg = context.message.content
+
+    embeds_splitdescr = []
+    descr = ''
+    if len(embed.description) > limit:
+        for line in embed.description.split('\n'):
+            if len(descr+f'{line}\n') <= limit:
+                descr += f'{line}\n'
+            else:
+                embed_page = discord.Embed(
+                    title=embed.title,
+                    description=descr,
+                    color=embed.colour,
+                )
+                embed_page.set_footer(text=embed.footer.text)
+                embeds_splitdescr.append(embed_page)
+                descr = f'{line}\n'
+        if descr:
+            embed_page = discord.Embed(
+                title=embed.title,
+                description=descr,
+                color=embed.colour,
+            )
+            embed_page.set_footer(text=embed.footer.text)
+            embeds_splitdescr.append(embed_page)
+    else:
+        embeds_splitdescr.append(embed)
+
+    # display search results summary on every page
+    is_search = False
+    if msg.split()[2] in ['s', REGCMD_ALIASES['s']] and embed.fields:
+        is_search = True
+        summary_field = embed.fields[-1]
+        embed.remove_field(-1)
+
+    embeds = []
+    for embed in embeds_splitdescr:
+        if embed.fields and len(embed) > 3000:
+            embed_page = discord.Embed(
+                title=embed.title,
+                description=embed.description,
+                color=embed.colour,
+            )
+            embed_page.set_footer(text=embed.footer.text)
+            for i in range(len(embed.fields)):
+                field = embed.fields[i]
+                #if len(embed_page)+len(field.name+field.value) < 3000:
+                if i == 0 or i % 10 != 0:
+                    embed_page.add_field(name=field.name, value=field.value, inline=field.inline)
+                else:
+                    if is_search: embed_page.add_field(
+                        name = summary_field.name,
+                        value = f'{summary_field.value} (showing **{i+1-len(embed_page.fields)}**-**{i}**)',
+                        inline = summary_field.inline,
+                    )
+                    embeds.append(embed_page)
+                    embed_page = discord.Embed(
+                        title=embed.title,
+                        description=embed.description,
+                        color=embed.colour,
+                    )
+                    embed_page.set_footer(text=embed.footer.text)
+                    embed_page.add_field(name=field.name, value=field.value, inline=field.inline)
+            if embed_page.fields:
+                i += 1
+                if is_search: embed_page.add_field(
+                    name = summary_field.name,
+                    value = f'{summary_field.value} (showing **{i+1-len(embed_page.fields)}**-**{i}**)',
+                    inline = summary_field.inline,
+                )
+                embeds.append(embed_page)
+        else:
+            if is_search: embed.add_field(name=summary_field.name, value=summary_field.value, inline=summary_field.inline)
+            embeds.append(embed)
+
+    paginator = BotEmbedPaginator(context, embeds, control_emojis=['⏮', '◀', '▶', '⏭', None])
+    try:
+        await paginator.run()
+    except discord.errors.Forbidden:
+        print(f'No permission to send to server \'{context.guild}\': \'#{context.channel}\'')
+
 def format_regions(guild_id):
     contents = ''
     for _, db in DBS.items():
@@ -284,7 +368,6 @@ def parse_command(context, args, region):
             params = ' '.join(params).strip(',')
             if params:
                 summary = ''
-                count = 0
 
                 results, error = lelnovo.search(params, db)
                 if error:
@@ -333,13 +416,8 @@ def parse_command(context, args, region):
                             value = contents,
                             inline = False,
                         )
-                        count += 1
-                        if count == 10:
-                            break
 
                     summary = f'Found **{len(results)}** result{"s" if len(results)!=1 else ""} for `{params}`'
-                    if len(results) > 10: summary += ' (only showing first 10)'
-
                     embed.add_field(
                         name = '\u200b',
                         value = summary,
@@ -359,7 +437,7 @@ def parse_command(context, args, region):
                 if info:
                     embed = discord.Embed(
                         title=f'{region_emoji} Specs for {info["name"]}',
-                        description=lelnovo.format_specs(db, info, ret_specs)[:2048],
+                        description=lelnovo.format_specs(db, info, ret_specs),
                         color=EMBED_COLOR,
                     )
                 else:
@@ -371,26 +449,45 @@ def parse_command(context, args, region):
 
                 embed.set_footer(text = lelnovo.get_footer(db))
         elif command in ['changes', 'ch']:
+            change_contents = lelnovo.format_changes(db['changes'], db['metadata']['base url'])
+            contents = ''
+            for k, v in change_contents.items():
+                cutoff_msg = f'*...and xx more. use* `changes {k}` *to view all*'
+                if k in ['added', 'removed'] and v:
+                    #contents = ''
+                    contents += f'\n__{k.capitalize()}__\n'
+                    count = 0
+                    for prod, parts in v.items():
+                        new_contents = f'{prod}\n'
+                        #if len(contents+new_contents)+len('\n'.join(parts)) < 1024-len(cutoff_msg):
+                        contents += new_contents
+                        contents += '\n'.join(parts)
+                        if parts: contents += '\n'
+                        count += 1
+                        #else:
+                        #    contents += cutoff_msg.replace('xx', f'{len(v)-count:2}')
+                        #    break
+                    contents += '\n'
+                    #embed.add_field(name=k.capitalize(), value=contents, inline=False)
+                if k == 'changed' and v:
+                    #contents = ''
+                    contents += f'\n__{k.capitalize()}__\n'
+                    for i in range(len(v)):
+                        new_contents = f'{v[i]}\n'
+                        #if len(contents+new_contents) < 1024-len(cutoff_msg):
+                        contents += new_contents
+                        #else:
+                        #    contents += cutoff_msg.replace('xx', f'{len(v)-i:2}')
+                        #    break
+                    contents += '\n'
+                    #embed.add_field(name=k.capitalize(), value=contents, inline=False)
+
             old_dt = datetime.utcfromtimestamp(db['changes']['timestamp_old'])
             embed = discord.Embed(
                 title=f'{region_emoji} Changes since {old_dt.strftime("%a %b %d")} ({lelnovo.pretty_duration((datetime.utcnow() - old_dt).total_seconds())} ago)',
-                #description='',
+                description=contents,
                 color=EMBED_COLOR,
             )
-
-            change_contents = lelnovo.format_changes(db['changes'])
-            for k, v in change_contents.items():
-                if k in ['added', 'removed']:
-                    contents = ''
-                    for prod, parts in v.items():
-                        contents += f'{prod}\n'
-                        contents += '\n'.join(parts)
-                        contents += '\n' if parts else ''
-                    embed.add_field(name=k.capitalize(), value=contents, inline=False)
-                elif k == 'changed':
-                    contents = '\n'.join(v)
-                    embed.add_field(name=k.capitalize(), value=contents, inline=False)
-
             embed.set_footer(text = lelnovo.get_footer(db))
 
     return embed

@@ -208,16 +208,12 @@ def format_specs(db, info, specs):
                     val, unit = tup
                     line = f'{num_spec:>{num_spec_spacing}}  {val} {unit}'
                     num_spec_contents += f'{multiline(line, indent=num_spec_spacing+2)}\n'
-                # only add num_specs if doesnt exceed length limit
-                if len(contents+num_spec_contents) < 2048:
-                    contents += num_spec_contents
-                else:
-                    contents += f'`{"num_specs":>{spacing}}  [omitted. use \'specs {info["part number"]} num_specs\' to view.]`\n'
+                contents += num_spec_contents
     else: contents += f'`[no valid specs to list]`\n'
 
     return contents
 
-def format_changes(changes):
+def format_changes(changes, base_url=None):
     shown_changed_specs = ['price', 'status', 'shipping']
 
     ret_contents = {
@@ -236,13 +232,14 @@ def format_changes(changes):
                 #print(f'  {brand}')
                 for prodn, prodname_ps in prod.items():
                     num = len(prodname_ps[1])
-                    if num > 0: header = f'**({num:3})'
+                    if num > 0: header = f'**({num})'
                     else: header = '**'
-                    header += f' {prodn} {prodname_ps[0]}**'
+                    #header += f' {prodn} {prodname_ps[0]}**'
+                    header += f' {prodname_ps[0]}**'
                     ret_contents[k][header] = []
                     for i in range(len(prodname_ps[1])):
                         p = prodname_ps[1][i]
-                        ret_contents[k][header].append(part_listentry(p))
+                        ret_contents[k][header].append(part_listentry(p, base_url))
         elif k == 'changed':
             avgs = []
             for brand, prod in v.items():
@@ -289,10 +286,12 @@ def format_changes(changes):
 
             for avg in sorted(avgs, key=lambda x: x['percent_change']):
                 avg_price_after = avg['price_before']*(1+avg['percent_change'])
+                if base_url: prodnum = f'{avg["prodnum"]} ([link]({base_url}/p/{avg["prodnum"]}))'
+                else:        prodnum = f'{avg["prodnum"]}'
                 ret_contents[k].append(
-                    f'  {avg["prodnum"]}'
-                    f' `{avg["percent_change"]:+4.0%}'
-                    f' ({"{}{:.2f}".format(curr, avg["price_before"]):>8}->{"{}{:.2f}".format(curr, avg_price_after):8})`'
+                    f' {prodnum}'
+                    f' `{avg["percent_change"]:+.0%}'
+                    f' ({"{}{:.2f}".format(curr, avg["price_before"])}->{"{}{:.2f}".format(curr, avg_price_after)})`'
                     f' {avg["prodname"]}'
                 )
 
@@ -345,18 +344,21 @@ def cleanup_gpu(gpu, level=0):
         gpu = re.sub('[RG]TX\s?', '' , gpu)
     return gpu
 
-def part_listentry(p, name=False):
+def part_listentry(p, base_url=None, name=False):
+    if base_url: pn = f'{p["part number"]} ([link]({base_url}/p/{p["part number"]}))'
+    else:        pn = f'{p["part number"]}'
     price = f'{p["num_specs"]["price"][1]}{p["num_specs"]["price"][0]:.2f}'
-    res = f'{p["num_specs"]["display res horizontal"][0]}x{p["num_specs"]["display res vertical"][0]}' if "display res vertical" in p["num_specs"] else ""
+    #res = f'{p["num_specs"]["display res horizontal"][0]}x{p["num_specs"]["display res vertical"][0]}' if "display res vertical" in p["num_specs"] else ""
+    res = f' {p["num_specs"]["display res vertical"][0]}p' if "display res vertical" in p["num_specs"] else ""
     proc = f'{cleanup_cpu(p["processor"], 2)}'
     if 'graphics' in p and 'discrete' in p['graphics'].lower(): proc += f', {cleanup_gpu(p["graphics"], 2)}'
     ret = (
-        f'{p["part number"]}'
-        f'`{price}'
-        f'{"  "+str(int(p["num_specs"]["memory"][0]))+p["num_specs"]["memory"][1] if "memory" in p["num_specs"] else "  "}'
-        f'{","+str(int(p["num_specs"]["storage"][0]))+p["num_specs"]["storage"][1] if "storage" in p["num_specs"] else " "}'
-        f'  {res}'
-        f'  {proc}`'
+        f'{pn}'
+        f' `{price}'
+        f'{" "+str(int(p["num_specs"]["memory"][0]))+p["num_specs"]["memory"][1] if "memory" in p["num_specs"] else ""}'
+        f'{","+str(int(p["num_specs"]["storage"][0]))+p["num_specs"]["storage"][1] if "storage" in p["num_specs"] else ""}'
+        f'{res}'
+        f' {proc}`'
     )
     if name: ret += f' {p["name"]}'
     return ret
