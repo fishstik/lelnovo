@@ -5,6 +5,7 @@ import configparser
 import json, time
 import os
 import atexit
+import sys
 from datetime import datetime
 
 from watchdog.observers import Observer
@@ -18,6 +19,17 @@ def exit():
 atexit.register(exit)
 
 CFG_FILENAME = 'config.ini'
+
+CFG = configparser.ConfigParser()
+if os.path.exists(CFG_FILENAME):
+    CFG.read(CFG_FILENAME)
+else:
+    CFG.add_section('bot')
+    CFG.set('bot', 'discord_token', '')
+    with open(CFG_FILENAME, 'w') as cfg_file: CFG.write(cfg_file)
+    sys.exit(f'Created template \'{CFG_FILENAME}\'. Add bot token and restart.')
+
+# TODO: move these to config
 DB_DIR = './dbs'
 BOT_PREFIX = ('!lelnovo ')
 EMBED_COLOR = 0xe41c1c
@@ -38,60 +50,57 @@ REGCMD_ALIASES = {
     'sp': 'specs',
 }
 
+BOT = discord.ext.commands.Bot(
+    command_prefix=BOT_PREFIX,
+    help_command=None
+)
+
+DBS = {} #{ short_region: db, ... }
+
 class FileHandler(FileSystemEventHandler):
     def on_modified(self, event):
-        global dbs
+        global DBS
         if event.src_path.endswith('.json'):
             print(f'{event.src_path} modified')
             for i in range(5):
                 try:
-                    dbs = lelnovo.get_dbs(DB_DIR)
-                    print('\n'.join([lelnovo.get_footer(db) for db in dbs.values()]))
+                    DBS = lelnovo.get_dbs(DB_DIR)
+                    print('\n'.join([lelnovo.get_footer(db) for db in DBS.values()]))
                     break
                 except json.decoder.JSONDecodeError:
                     print(f'JSON load error. Retrying ({i+1}/5)...')
                     time.sleep(1)
 
-bot = discord.ext.commands.Bot(
-    command_prefix=BOT_PREFIX,
-    help_command=None
-)
-
-#dbs = {
-#    short_region : db,
-#}
-dbs = {}
-
 ### start command for every region ###
 
-@bot.command()
+@BOT.command()
 async def us(context, *args):
     embed = parse_command(context, args, region='us')
     if embed: await try_send(context, embed=embed)
 
-@bot.command()
+@BOT.command()
 async def tck(context, *args):
     embed = parse_command(context, args, region='tck')
     if embed: await try_send(context, embed=embed)
 
-@bot.command()
+@BOT.command()
 async def ca(context, *args):
     embed = parse_command(context, args, region='ca')
     if embed: await try_send(context, embed=embed)
 
-@bot.command()
+@BOT.command()
 async def epp(context, *args):
     embed = parse_command(context, args, region='epp')
     if embed: await try_send(context, embed=embed)
 
-@bot.command()
+@BOT.command()
 async def gb(context, *args):
     embed = parse_command(context, args, region='gb')
     if embed: await try_send(context, embed=embed)
 
 ### end region commands ###
 
-@bot.command(name='help',
+@BOT.command(name='help',
     aliases = ['h'],
 )
 async def cmd_help(context, *args):
@@ -113,7 +122,7 @@ async def cmd_help(context, *args):
 
     await try_send(context, content=f'```\n{msg}```')
 
-@bot.command(name='listregions',
+@BOT.command(name='listregions',
     aliases     = ['lr'],
     brief       = lelnovo.COMMAND_BRIEFS['listregions'],
     description = lelnovo.COMMAND_DESCRS['listregions'],
@@ -126,7 +135,7 @@ async def cmd_listregions(context):
     )
     await try_send(context, embed=embed)
 
-@bot.command(name='status',
+@BOT.command(name='status',
     aliases=['st'],
     brief='display status for all available databases',
     description='display status for all available databases',
@@ -138,7 +147,7 @@ async def cmd_status(context):
         title='All Database Statuses',
         color=EMBED_COLOR,
     )
-    for k, db in dbs.items():
+    for k, db in DBS.items():
         region = db['metadata']['short region']
         if not (guild_id in DISABLED_REGIONS and region in DISABLED_REGIONS[guild_id]):
             contents = ''
@@ -153,10 +162,10 @@ async def cmd_status(context):
 
     await try_send(context, embed=embed)
 
-@bot.event
+@BOT.event
 async def on_ready():
-    global dbs
-    print('Logged in as {0}'.format(bot.user.name))
+    global DBS
+    print('Logged in as {0}'.format(BOT.user.name))
 
     file_handler = FileHandler()
     observer = Observer()
@@ -164,11 +173,11 @@ async def on_ready():
     observer.start()
     print(f'Monitoring \'{DB_DIR}\'')
 
-    dbs = lelnovo.get_dbs(DB_DIR)
+    DBS = lelnovo.get_dbs(DB_DIR)
 
-    print('\n'.join([lelnovo.get_footer(db) for db in dbs.values()]))
+    print('\n'.join([lelnovo.get_footer(db) for db in DBS.values()]))
 
-@bot.event
+@BOT.event
 async def on_command_error(context, error):
     if isinstance(error, discord.ext.commands.CommandNotFound):
         cmd = context.invoked_with
@@ -198,7 +207,7 @@ async def try_send(context, content=None, embed=None):
 
 def format_regions(guild_id):
     contents = ''
-    for _, db in dbs.items():
+    for _, db in DBS.items():
         region = db['metadata']['region']
         region_short = db['metadata']['short region']
 
@@ -218,7 +227,7 @@ def parse_command(context, args, region):
         command = args[0]
         params = args[1:]
 
-        db = dbs[region]
+        db = DBS[region]
         region_emoji = lelnovo.get_region_emoji(db['metadata']['short region'])
 
         if command in ['status', 'st']:
@@ -384,14 +393,6 @@ def parse_command(context, args, region):
     return embed
 
 if __name__ == '__main__':
-    cfg = configparser.ConfigParser()
-    if os.path.exists(CFG_FILENAME):
-        cfg.read(CFG_FILENAME)
-        token = cfg['discord']['token']
-        if token: bot.run(token)
-        else:     print(f'Token not found in \'{CFG_FILENAME}\'')
-    else:
-        cfg.add_section('discord')
-        cfg.set('discord', 'token', '')
-        with open(CFG_FILENAME, 'w') as cfg_file: cfg.write(cfg_file)
-        print(f'Created template \'{CFG_FILENAME}\'. Add bot token and restart.')
+    token = CFG['bot']['discord_token']
+    if token: BOT.run(token)
+    else:     sys.exit(f'Token not found in \'{CFG_FILENAME}\'')
