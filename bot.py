@@ -42,12 +42,12 @@ DISABLED_REGIONS = {
     #851248442864173057: ['tck'], # lbt2
     361360173530480640: ['tck', 'epp'], # SAL
 }
-# TODO: add ability to save region per user for ls,s,sp,ch
 
 CMD_ALIASES = {
     'h': 'help',
     'lr': 'listregions',
     'st': 'status',
+    'sr': 'setregion',
 }
 REGCMD_ALIASES = {
     'st': 'status',
@@ -144,8 +144,6 @@ async def cmd_listregions(context):
 
 @BOT.command(name='status',
     aliases=['st'],
-    brief='display status for all available databases',
-    description='display status for all available databases',
 )
 async def cmd_status(context):
     guild_id = context.guild.id
@@ -169,6 +167,41 @@ async def cmd_status(context):
 
     await try_send(context, embed=embed)
 
+@BOT.command(name='setregion',
+    aliases=['sr'],
+)
+async def cmd_setregion(context, *args):
+    arg = ' '.join(args).strip().lower()
+    id = str(context.author.id)
+
+    if arg == '':
+        if 'user regions' in CFG and id in CFG['user regions']:
+            reg = CFG['user regions'][id]
+            content = f'{context.author.mention} using region `{reg}`{lelnovo.REGION_EMOJIS[reg]}'
+        else:
+            content = f'No region set for {context.author.mention}'
+    elif arg in lelnovo.REGION_EMOJIS:
+        if 'user regions' not in CFG: CFG.add_section('user regions')
+        CFG.set('user regions', id, arg)
+        with open(CFG_FILENAME, 'w') as cfg_file: CFG.write(cfg_file)
+        content = f'Saved region `{arg}`{lelnovo.REGION_EMOJIS[arg]} for {context.author.mention}'
+    elif arg in ['clear', 'cl']:
+        if 'user regions' in CFG and id in CFG['user regions']:
+            CFG.remove_option('user regions', id)
+            with open(CFG_FILENAME, 'w') as cfg_file: CFG.write(cfg_file)
+            content = f'Cleared region for {context.author.mention}'
+        else:
+            content = f'No region set for {context.author.mention}'
+    else:
+        content = f'Invalid region `{arg}`. Use `{BOT_PREFIXES[0]} listregions` to view valid regions'
+
+    embed = discord.Embed(
+        title='User Region',
+        description=content,
+        color=EMBED_COLOR,
+    )
+    await try_send(context, embed=embed)
+
 @BOT.event
 async def on_ready():
     global DBS
@@ -185,6 +218,7 @@ async def on_ready():
 
     print('\n'.join([lelnovo.get_footer(db) for db in DBS.values()]))
 
+# also handles region-less commands with saved user region
 @BOT.event
 async def on_command_error(context, error):
     if isinstance(error, discord.ext.commands.CommandNotFound):
@@ -192,16 +226,24 @@ async def on_command_error(context, error):
 
         if cmd in REGCMD_ALIASES: cmd = REGCMD_ALIASES[cmd]
         if cmd in REGCMD_ALIASES.values():
-            embed = discord.Embed(
-                title=f'No region specified for command `{cmd}`',
-                description=f'usage: `{BOT_PREFIXES[0]} [region] [command] [parameters, ...]`\n',
-                color=EMBED_COLOR,
-            )
-            embed.add_field(
-                name='Available regions',
-                value=format_regions(context.guild.id),
-                inline=False,
-            )
+            # parse region-less region command with saved user region
+            if 'user regions' in CFG and str(context.author.id) in CFG['user regions']:
+                args = [] if len(context.message.content.split(' ')) <= 2 else context.message.content.split(' ')[2:]
+                embed = parse_command(context, [cmd]+args, CFG['user regions'][str(context.author.id)])
+            else:
+                embed = discord.Embed(
+                    title=f'No region specified for command `{cmd}`',
+                    description = (
+                        f'`usage: {BOT_PREFIXES[0]} [region] [command] [parameters, ...]`\n'
+                        f'`       {BOT_PREFIXES[0]} setregion [region]`\n'
+                    ),
+                    color=EMBED_COLOR,
+                )
+                embed.add_field(
+                    name='Available regions',
+                    value=format_regions(context.guild.id),
+                    inline=False,
+                )
             await try_send(context, embed=embed)
         else:
             print(f'Ignoring invalid command \'{cmd}\'')

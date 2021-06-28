@@ -414,6 +414,7 @@ def get_usage_str(prefixes):
         f'  {"h|help command":14}    show help for command\n'
         f'  {"lr|listregions":14}    {COMMAND_BRIEFS["listregions"]}\n'
         f'  {"st|status"     :14}    {COMMAND_BRIEFS["status"]}\n'
+        f'  {"sr|setregion"  :14}    {COMMAND_BRIEFS["setregion"]}\n'
         f'\n'
         f'commands with region:\n'
         f'  {"st|status"     :14}    {COMMAND_BRIEFS["reg_status"]}\n'
@@ -434,7 +435,23 @@ def get_usage_str(prefixes):
     )
 
 def get_command_descr(cmd, prefix):
-    if cmd == 'listregions':
+    if cmd == 'setregion':
+        ret_str = (
+            f'usage: {prefix} setregion [region / \'cl\'|\'clear\']\n'
+            f'       {prefix} sr        [region / \'cl\'|\'clear\']\n'
+            f'\n'
+            f'{COMMAND_BRIEFS["setregion"]}\n'
+            f'\n'
+            f'use \'{prefix} setregion\' to view currently saved region\n'
+            f'use \'{prefix} setregion clear\' to clear saved region\n'
+            f'use \'{prefix} listregions\' to view valid regions\n'
+            f'\n'
+            f'examples:\n'
+            f'  "{prefix} setregion"\n'
+            f'  "{prefix} setregion tck"\n'
+            f'  "{prefix} setregion clear"\n'
+        )
+    elif cmd == 'listregions':
         ret_str = (
             f'usage: {prefix} listregions\n'
             f'       {prefix} lr\n'
@@ -509,6 +526,7 @@ def get_command_descr(cmd, prefix):
     return ret_str
 
 COMMAND_BRIEFS = {
+    'setregion':     'set/view/clear user region for region commands',
     'listregions':   'list all available regions',
     'status':        'display status for all available databases',
     'reg_status':    'display region\'s database status',
