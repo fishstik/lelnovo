@@ -404,9 +404,10 @@ def get_dbs(dir):
                 dbs[db['metadata']['short region']] = db
     return dbs
 
-def get_usage_str(prefix):
+def get_usage_str(prefixes):
+    prefix = prefixes[0]
     return (
-        f'usage: {prefix} [region] [command] [parameters, ...]\n'
+        f'usage: {"|".join(prefixes)} [region] [command] [parameters, ...]\n'
         f'\n'
         f'commands without region:\n'
         f'  {"h|help"        :14}    show this help message\n'

@@ -27,14 +27,16 @@ if os.path.exists(CFG_FILENAME):
 else:
     CFG.add_section('bot')
     CFG.set('bot', 'discord_token', '')
-    CFG.set('bot', 'prefix', '!lenovo')
+    CFG.set('bot', 'prefix', '!lenovo, !ln')
     CFG.set('bot', 'embed_color', 'e41c1c')
     with open(CFG_FILENAME, 'w') as cfg_file: CFG.write(cfg_file)
     sys.exit(f'Created template \'{CFG_FILENAME}\'. Add bot token and restart.')
 
 # TODO: move these to config
 DB_DIR = './dbs'
-BOT_PREFIX = CFG['bot']['prefix']
+BOT_PREFIXES = []
+for prefix in CFG['bot']['prefixes'].split(','):
+    BOT_PREFIXES.append(prefix.strip())
 EMBED_COLOR = int(CFG['bot']['embed_color'], 16)
 DISABLED_REGIONS = {
     #851248442864173057: ['tck'], # lbt2
@@ -56,7 +58,7 @@ REGCMD_ALIASES = {
 }
 
 BOT = discord.ext.commands.Bot(
-    command_prefix=f'{BOT_PREFIX} ',
+    command_prefix=[f'{p} ' for p in BOT_PREFIXES],
     help_command=None
 )
 
@@ -115,22 +117,22 @@ async def cmd_help(context, *args):
     if arg in ['h', CMD_ALIASES['h']]:
         msg = 'haha nice try'
     elif arg in CMD_ALIASES.values():
-        msg = ''.join(lelnovo.get_command_descr(arg, BOT_PREFIX))
+        msg = ''.join(lelnovo.get_command_descr(arg, BOT_PREFIXES[0]))
     elif arg in CMD_ALIASES.keys():
-        msg = ''.join(lelnovo.get_command_descr(CMD_ALIASES[arg], BOT_PREFIX))
+        msg = ''.join(lelnovo.get_command_descr(CMD_ALIASES[arg], BOT_PREFIXES[0]))
     elif arg in REGCMD_ALIASES.values():
-        msg = ''.join(lelnovo.get_command_descr(f'reg_{arg}', BOT_PREFIX))
+        msg = ''.join(lelnovo.get_command_descr(f'reg_{arg}', BOT_PREFIXES[0]))
     elif arg in REGCMD_ALIASES.keys():
-        msg = ''.join(lelnovo.get_command_descr(f'reg_{REGCMD_ALIASES[arg]}', BOT_PREFIX))
+        msg = ''.join(lelnovo.get_command_descr(f'reg_{REGCMD_ALIASES[arg]}', BOT_PREFIXES[0]))
     else:
-        msg = lelnovo.get_usage_str(BOT_PREFIX)
+        msg = lelnovo.get_usage_str(BOT_PREFIXES)
 
     await try_send(context, content=f'```\n{msg}```')
 
 @BOT.command(name='listregions',
     aliases     = ['lr'],
     brief       = lelnovo.COMMAND_BRIEFS['listregions'],
-    description = lelnovo.get_command_descr('listregions', BOT_PREFIX),
+    description = lelnovo.get_command_descr('listregions', BOT_PREFIXES[0]),
 )
 async def cmd_listregions(context):
     embed = discord.Embed(
@@ -171,7 +173,7 @@ async def cmd_status(context):
 async def on_ready():
     global DBS
     print('Logged in as {0}'.format(BOT.user.name))
-    await BOT.change_presence(activity=discord.Game(f'{BOT_PREFIX} help'))
+    await BOT.change_presence(activity=discord.Game(f'{BOT_PREFIXES[0]} help'))
 
     file_handler = FileHandler()
     observer = Observer()
@@ -192,7 +194,7 @@ async def on_command_error(context, error):
         if cmd in REGCMD_ALIASES.values():
             embed = discord.Embed(
                 title=f'No region specified for command `{cmd}`',
-                description=f'usage: `{BOT_PREFIX} [region] [command] [parameters, ...]`\n',
+                description=f'usage: `{BOT_PREFIXES[0]} [region] [command] [parameters, ...]`\n',
                 color=EMBED_COLOR,
             )
             embed.add_field(
