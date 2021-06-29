@@ -244,7 +244,7 @@ async def on_command_error(context, error):
                     value=format_regions(context.guild.id),
                     inline=False,
                 )
-            await try_send(context, embed=embed)
+            await try_send_paginated(context, embed=embed)
         else:
             print(f'Ignoring invalid command \'{cmd}\'')
     else: raise error
@@ -286,7 +286,7 @@ async def try_send_paginated(context, embed, limit=2048):
 
     # display search results summary on every page
     is_search = False
-    if msg.split()[2] in ['s', REGCMD_ALIASES['s']] and embed.fields:
+    if embed.fields and (msg.split()[1] in ['s', REGCMD_ALIASES['s']] or (len(msg.split()) >= 3 and msg.split()[2] in ['s', REGCMD_ALIASES['s']])):
         is_search = True
         summary_field = embed.fields[-1]
         embed.remove_field(-1)
