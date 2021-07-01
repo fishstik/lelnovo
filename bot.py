@@ -416,7 +416,7 @@ def parse_command(context, args, region):
                 cutoff_msg = f'*...and xx more. use* `changes {k}` *to view all*'
                 if k in ['added', 'removed'] and v:
                     #contents = ''
-                    contents += f'\n__{k.capitalize()}__\n'
+                    contents += f'\n**{k.capitalize()}**\n'
                     count = 0
                     for prod, parts in v.items():
                         new_contents = f'{prod}\n'
@@ -428,11 +428,10 @@ def parse_command(context, args, region):
                         #else:
                         #    contents += cutoff_msg.replace('xx', f'{len(v)-count:2}')
                         #    break
-                    contents += '\n'
                     #embed.add_field(name=k.capitalize(), value=contents, inline=False)
                 if k == 'changed' and v:
                     #contents = ''
-                    contents += f'\n__{k.capitalize()}__\n'
+                    contents += f'\n**Price Changed**\n'
                     for i in range(len(v)):
                         new_contents = f'{v[i]}\n'
                         #if len(contents+new_contents) < 1024-len(cutoff_msg):
@@ -440,7 +439,6 @@ def parse_command(context, args, region):
                         #else:
                         #    contents += cutoff_msg.replace('xx', f'{len(v)-i:2}')
                         #    break
-                    contents += '\n'
                     #embed.add_field(name=k.capitalize(), value=contents, inline=False)
 
             old_dt = datetime.utcfromtimestamp(db['changes']['timestamp_old'])

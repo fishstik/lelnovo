@@ -231,11 +231,14 @@ def format_changes(changes, base_url=None):
             for brand, prod in v.items():
                 #print(f'  {brand}')
                 for prodn, prodname_ps in prod.items():
+                    if base_url: prodlink = f' [{prodname_ps[0]}]({base_url}/p/{prodn})'
+                    else:        prodlink = f' {prodname_ps[0]}'
+                    header = f' **{prodlink}**'
+
                     num = len(prodname_ps[1])
-                    if num > 0: header = f'**({num})'
-                    else: header = '**'
-                    #header += f' {prodn} {prodname_ps[0]}**'
-                    header += f' {prodname_ps[0]}**'
+                    if num > 0: header += f' ({num})'
+                    else:       header += ''
+
                     ret_contents[k][header] = []
                     for i in range(len(prodname_ps[1])):
                         p = prodname_ps[1][i]
@@ -280,19 +283,22 @@ def format_changes(changes, base_url=None):
                     if avg['percent_change']:
                         avg['prodnum']        = prodn
                         avg['prodname']       = prodname_ps[0]
+                        avg['count']          = len(avg['price_before'])
                         avg['price_before']   = sum(avg['price_before'])/len(avg['price_before'])
                         avg['percent_change'] = sum(avg['percent_change'])/len(avg['percent_change'])
                         avgs.append(avg)
 
             for avg in sorted(avgs, key=lambda x: x['percent_change']):
                 avg_price_after = avg['price_before']*(1+avg['percent_change'])
-                if base_url: prodnum = f'{avg["prodnum"]} ([link]({base_url}/p/{avg["prodnum"]}))'
-                else:        prodnum = f'{avg["prodnum"]}'
+                if base_url: prodname = f'[{avg["prodname"]}]({base_url}/p/{avg["prodnum"]})'
+                else:        prodname = avg['prodname']
+                percent = f'{"avg " if avg["count"] > 1 else ""}{avg["percent_change"]:+.0%}'
+                before = f'{curr}{round(avg["price_before"])}'
+                after =  f'{curr}{round(avg_price_after)}'
                 ret_contents[k].append(
-                    f' {prodnum}'
-                    f' `{avg["percent_change"]:+.0%}'
-                    f' ({"{}{:.2f}".format(curr, avg["price_before"])}->{"{}{:.2f}".format(curr, avg_price_after)})`'
-                    f' {avg["prodname"]}'
+                    f'`{percent:>8}  {before:>5}->{after:>5}` '
+                    f'**{prodname}** '
+                    f'({avg["count"]})'
                 )
 
     return ret_contents
