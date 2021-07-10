@@ -543,11 +543,12 @@ COMMAND_BRIEFS = {
 }
 
 REGION_EMOJIS = {
-    'us':  ':flag_us:',
-    'tck': ':tickets:',
-    'gb':  ':flag_gb:',
-    'ca':  ':flag_ca:',
-    'epp': ':maple_leaf:',
+    'us':    ':flag_us:',
+    'tck':   ':tickets:',
+    'gb':    ':flag_gb:',
+    'ca':    ':flag_ca:',
+    'epp':   ':maple_leaf:',
+    'gbepp': ':pound:',
 }
 SPEC_ALIASES = {
     'cores':     'cpu cores',
