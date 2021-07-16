@@ -476,7 +476,7 @@ if args.region in ['us/en/ticketsatwork', 'gb/en/gbepp']:
     #if args.region == 'us/en/ticketsatwork':
     #    passcode = 'TICKETSatWK'
     #elif args.region == 'gb/en/gbepp':
-    #    passcode = 'lenovo2021epp'
+    #    passcode = 'lenovo2013epp'
 
     db['metadata']['passcode'] = args.password
     # authenticate with ticketsatwork
