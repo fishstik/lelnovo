@@ -40,7 +40,7 @@ for prefix in CFG['bot']['prefixes'].split(','):
 EMBED_COLOR = int(CFG['bot']['embed_color'], 16)
 DISABLED_REGIONS = {
     #851248442864173057: ['tck'], # lbt2
-    361360173530480640: ['tck', 'epp'], # SAL
+    361360173530480640: ['tck', 'epp', 'gbepp'], # SAL
 }
 
 CMD_ALIASES = {
@@ -103,6 +103,11 @@ async def epp(context, *args):
 @BOT.command()
 async def gb(context, *args):
     embed = parse_command(context, args, region='gb')
+    if embed: await try_send_paginated(context, embed)
+
+@BOT.command()
+async def gbepp(context, *args):
+    embed = parse_command(context, args, region='gbepp')
     if embed: await try_send_paginated(context, embed)
 
 ### end region commands ###

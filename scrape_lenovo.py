@@ -430,6 +430,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('region')
 parser.add_argument('region_short')
 parser.add_argument('mp_threads', type=int)
+parser.add_argument('-pw', '--password')
 parser.add_argument('-p', '--print_progress', action='store_true')
 parser.add_argument('-l', '--print_live_progress', action='store_true')
 args = parser.parse_args()
@@ -480,10 +481,17 @@ db = {
 
 start = time.time()
 
-if args.region == 'us/en/ticketsatwork':
+if args.region in ['us/en/ticketsatwork', 'gb/en/gbepp']:
     print(f'Authenticating ticketsatwork...')
-    passcode = 'TICKETSatWK'
-    db['metadata']['passcode'] = passcode
+    if not args.password:
+        print('\'args.region\' requires --password argument. Exiting...')
+        sys.exit()
+    #if args.region == 'us/en/ticketsatwork':
+    #    passcode = 'TICKETSatWK'
+    #elif args.region == 'gb/en/gbepp':
+    #    passcode = 'lenovo2013epp'
+
+    db['metadata']['passcode'] = args.password
     # authenticate with ticketsatwork
     payload = {
         'gatekeeperType': 'PasscodeGatekeeper',
@@ -499,7 +507,7 @@ if args.region == 'us/en/ticketsatwork':
 # collect brands from seriesListPage api call
 print(f'Collecting brands...')
 series = [
-    'THINKPAD' if args.region == 'gb/en' else 'thinkpad',
+    'THINKPAD' if args.region in ['gb/en', 'gb/en/gbepp'] else 'thinkpad',
     'IdeaPad',
     'legion-laptops',
 ]
