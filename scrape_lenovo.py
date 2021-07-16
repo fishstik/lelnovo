@@ -90,6 +90,9 @@ def get_info(prod, button):
     return pn, info
 
 def get_api_specs(session, pn):
+    specs = {}
+    num_specs = {}
+
     spec_merge = {
         'battery':                    'battery',
         'blue tooth':                 'bluetooth',
@@ -160,7 +163,11 @@ def get_api_specs(session, pn):
         'usage_attr1',
     ]
     r = try_request(session, f'{BASE_URL}/p/{pn}/specs/json')
-    d = json.loads(r.text)
+    try:
+        d = json.loads(r.text)
+    except:
+        print(f'request \'{BASE_URL}/p/{pn}/specs/json\' returned None')
+        return specs, num_specs
 
     all_specs = []
     for feature_types_d in d['classificationData']:
@@ -170,8 +177,6 @@ def get_api_specs(session, pn):
             all_specs.append((feature_d['name'], feature_val, feature_type))
 
     # merge/clean up specs
-    specs = {}
-    num_specs = {}
     for spec in all_specs:
         spec_name = spec[0].lower()
         spec_value = spec[1]
@@ -247,11 +252,16 @@ def process_brand(s, brand, print_part_progress=False, print_live_progress=False
         pcodes.extend(soup.select_one('#partNumbers')['data-partnumbers'].strip(',').split(','))
     else:
         r = try_request(s, f'{BASE_URL}/c/{brand}')
-        soup = BeautifulSoup(r.content, 'html.parser')
-        pcodes = soup.select_one('meta[name="subseriesPHimpressions"], meta[name="bundleIDimpressions"]')['content'].split(',')
+        if r:
+            soup = BeautifulSoup(r.content, 'html.parser')
+            pcodes = soup.select_one('meta[name="subseriesPHimpressions"], meta[name="bundleIDimpressions"]')['content'].split(',')
 
-    for pn in set(pcodes):
-        prods[pn] = []
+    if pcodes:
+        for pn in set(pcodes):
+            prods[pn] = []
+    else:
+        print(f'No pcodes found for {BASE_URL}/c/{brand}')
+        return prods, keys
 
     if print_part_progress: print(f'{brand} ({len(prods)}) {time.time()-start:.1f}s')
 
@@ -284,13 +294,16 @@ def process_brand(s, brand, print_part_progress=False, print_live_progress=False
                         # get price info from api call
                         r = try_request(s, f'{BASE_URL}/p/{pn}/singlev2/price/json')
                         if r:
-                            d = json.loads(r.text)
-                            currency = d['currencySymbol']
-                            if d['eCoupon']: info['coupon'] = d['eCoupon']
-                            price_str = d['startingAtPrice']
-                            for ch in [currency, ',']:
-                                if ch in price_str: price_str = price_str.replace(ch, '')
-                            num_specs['price'] = NumSpec(float(price_str), currency)
+                            try:
+                                d = json.loads(r.text)
+                                currency = d['currencySymbol']
+                                if d['eCoupon']: info['coupon'] = d['eCoupon']
+                                price_str = d['startingAtPrice']
+                                for ch in [currency, ',']:
+                                    if ch in price_str: price_str = price_str.replace(ch, '')
+                                num_specs['price'] = NumSpec(float(price_str), currency)
+                            except:
+                                print(f'Error getting price json from \'{BASE_URL}/p/{pn}/singlev2/price/json\'')
 
                         # merge api specs with info
                         info.update(api_specs)
