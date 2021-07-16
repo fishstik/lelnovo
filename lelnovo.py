@@ -296,7 +296,7 @@ def format_changes(changes, base_url=None):
                 before = f'{curr}{round(avg["price_before"])}'
                 after =  f'{curr}{round(avg_price_after)}'
                 ret_contents[k].append(
-                    f'`{percent:>8}  {before:>5}->{after:>5}` '
+                    f'`{percent:>9} {before:>5}->{after:>5}` '
                     f'**{prodname}** '
                     f'({avg["count"]})'
                 )
