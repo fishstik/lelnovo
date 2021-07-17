@@ -405,7 +405,7 @@ def get_history(pn, dbs):
 # takes (data, part) return value from get_history()
 # returns binary stream of plot image
 def plot_history(data, part):
-    unav_alpha = 0.5
+    unav_alpha = 0.6
 
     if part:
         curr = part['num_specs']['price'][1]
@@ -435,7 +435,7 @@ def plot_history(data, part):
         plt.text(x=x[0], y=y[0]-ylim/5/3, s=f'{curr}{round(y[0])}', **{'fontweight': 'bold'})
         for i in range(1, len(y)):
             if y[i] != -100 and abs(y[i]/y[i-1]-1) > 0.05:
-                plt.text(x=x[i], y=y[i]-ylim/5/3, s=f'{curr}{round(y[i])}', **{'fontweight': 'bold'})
+                plt.text(x=x[i], y=y[i]-ylim/5/3, s=f'{curr}{round(y[i])}', **{'fontweight': 'bold', 'alpha': a[i]})
 
         plt.title(part['name'])
         plt.scatter(x, y, alpha=a)
