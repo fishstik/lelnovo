@@ -165,8 +165,8 @@ def get_api_specs(session, pn):
     r = try_request(session, f'{BASE_URL}/p/{pn}/specs/json')
     try:
         d = json.loads(r.text)
-    except:
-        print(f'request \'{BASE_URL}/p/{pn}/specs/json\' returned None')
+    except BaseException as e:
+        print(f'Error parsing \'{BASE_URL}/p/{pn}/specs/json\':\n{e}')
         return specs, num_specs
 
     all_specs = []
@@ -241,26 +241,18 @@ def process_brand(s, brand, print_part_progress=False, print_live_progress=False
     if print_live_progress: print(brand, end='\r')
 
     pcodes = []
-    if brand == 'yoga':
-        r = try_request(s, f'{BASE_URL}/yoga/products')
-        soup = BeautifulSoup(r.content, 'html.parser')
-        for yoga in soup.select('section.yoga-list-convertibles'):
-            pcodes.extend([p['data-article-test'] for p in yoga.select('*[data-article-test]')])
-    elif brand == 'ideapad-s-series':
-        r = try_request(s, f'{BASE_URL}/d/ideapad-ultra-thin')
-        soup = BeautifulSoup(r.content, 'html.parser')
-        pcodes.extend(soup.select_one('#partNumbers')['data-partnumbers'].strip(',').split(','))
-    else:
-        r = try_request(s, f'{BASE_URL}/c/{brand}')
-        if r:
-            soup = BeautifulSoup(r.content, 'html.parser')
-            pcodes = soup.select_one('meta[name="subseriesPHimpressions"], meta[name="bundleIDimpressions"]')['content'].split(',')
+    r = try_request(s, f'{BASE_URL}/c/products/json?categoryCodes={brand}')
+    try:
+        d = json.loads(r.text)
+        if brand in d: pcodes.extend([p['code'] for p in d[brand]])
+    except BaseException as e:
+        print(f'Error parsing \'{BASE_URL}/c/products/json?categoryCodes={brand}\':\n{e}')
 
     if pcodes:
         for pn in set(pcodes):
             prods[pn] = []
     else:
-        print(f'No pcodes found for {BASE_URL}/c/{brand}')
+        print(f'No pcodes found for \'{brand}\'')
         return prods, keys
 
     if print_part_progress: print(f'{brand} ({len(prods)}) {time.time()-start:.1f}s')
@@ -284,26 +276,26 @@ def process_brand(s, brand, print_part_progress=False, print_live_progress=False
             for prod in soup.select('li.tabbedBrowse-productListing-container, div.tabbedBrowse-module.singleModelView'):
                 button = prod.select_one('form[id^="addToCartFormTop"] button[class*="tabbedBrowse-productListing-footer"]')
                 if button:
+                    # get pn, name, shipping info from html scrape
                     res = get_info(prod, button)
                     if res:
                         pn, info = res
 
-                        #info['api_specs'], info['num_specs'] = get_api_specs(s, pn)
+                        # get specs from api call
                         api_specs, num_specs = get_api_specs(s, pn)
 
                         # get price info from api call
                         r = try_request(s, f'{BASE_URL}/p/{pn}/singlev2/price/json')
-                        if r:
-                            try:
-                                d = json.loads(r.text)
-                                currency = d['currencySymbol']
-                                if d['eCoupon']: info['coupon'] = d['eCoupon']
-                                price_str = d['startingAtPrice']
-                                for ch in [currency, ',']:
-                                    if ch in price_str: price_str = price_str.replace(ch, '')
-                                num_specs['price'] = NumSpec(float(price_str), currency)
-                            except:
-                                print(f'Error getting price json from \'{BASE_URL}/p/{pn}/singlev2/price/json\'')
+                        try:
+                            d = json.loads(r.text)
+                            currency = d['currencySymbol']
+                            if d['eCoupon']: info['coupon'] = d['eCoupon']
+                            price_str = d['startingAtPrice']
+                            for ch in [currency, ',']:
+                                if ch in price_str: price_str = price_str.replace(ch, '')
+                            num_specs['price'] = NumSpec(float(price_str), currency)
+                        except BaseException as e:
+                            print(f'Error parsing \'{BASE_URL}/p/{pn}/singlev2/price/json\':\n{e}')
 
                         # merge api specs with info
                         info.update(api_specs)
@@ -482,20 +474,16 @@ db = {
 start = time.time()
 
 if args.region in ['us/en/ticketsatwork', 'gb/en/gbepp']:
-    print(f'Authenticating ticketsatwork...')
+    print(f'Authenticating \'{args.region}\'...')
     if not args.password:
-        print('\'args.region\' requires --password argument. Exiting...')
+        print(f'\'{args.region}\' requires --password argument. Exiting...')
         sys.exit()
-    if args.region == 'us/en/ticketsatwork':
-        passcode = 'TICKETSatWK'
-    elif args.region == 'gb/en/gbepp':
-        passcode = 'lenovo2013epp'
 
     db['metadata']['passcode'] = args.password
-    # authenticate with ticketsatwork
+    # authenticate with passcode-protected sites
     payload = {
         'gatekeeperType': 'PasscodeGatekeeper',
-        'passcode': passcode
+        'passcode': args.password
         #'CSRFToken': csrf,
     }
     url = f"{BASE_URL}/gatekeeper/authGatekeeper"
@@ -519,14 +507,15 @@ for ser in series:
         brands.append(brand_d['code'])
 brands.extend([
     'thinkbook-series',
-    'yoga',
+    'yoga-2-in-1-series',
+    'yoga-slim-series',
 ])
 [brands.remove(b) for b in [
     'thinkpadyoga',
     'thinkpadyoga-2',
     'thinkpad11e',
 ] if b in brands]
-#brands = ['ideapad-s-series', 'IdeaPad-300', 'legion-7-series', 'ideapad-gaming-laptops']
+#brands = ['yoga-2-in-1-series', 'yoga-slim-series', 'ideapad-s-series', 'IdeaPad-300', 'legion-7-series', 'ideapad-gaming-laptops']
 print(f'Got {len(brands)} brands')
 
 print(f'Scraping \'{args.region}\'...')
