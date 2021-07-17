@@ -520,13 +520,14 @@ def get_usage_str(prefixes):
         f'  {"hi|history"    :14}    {COMMAND_BRIEFS["reg_history"]}\n'
         f'\n'
         f'examples:\n'
-        f'  "{prefix} listregions"\n'
         f'  "{prefix} help search"\n'
+        f'  "{prefix} listregions"\n'
         f'  "{prefix} us status"\n'
         f'  "{prefix} us search x1e, price<=1400, display:fhd"\n'
         f'  "{prefix} us specs 20TK001EUS"\n'
         f'  "{prefix} us specs 20TK001EUS price, display, memory"\n'
         f'  "{prefix} us history 20TK001EUS"\n'
+        f'  "{prefix} setregion us", then "{prefix} history 20TK001EUS"\n'
     )
 
 def get_command_descr(cmd, prefixes):
