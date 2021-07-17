@@ -592,6 +592,7 @@ def parse_command(context, args, region):
                         description=f'Check that the part number is valid. Discontinued or upcoming products are not in database.',
                         color=EMBED_COLOR,
                     )
+                embed.set_footer(text = lelnovo.get_footer(db))
 
     return embed, attach
 
