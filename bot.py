@@ -66,7 +66,7 @@ BOT = discord.ext.commands.Bot(
     help_command=None
 )
 
-DBS = {} #{ short_region: db, ... }
+DBS = {} # { short_region: db, ... }
 
 class FileHandler(FileSystemEventHandler):
     def on_modified(self, event):
@@ -86,33 +86,27 @@ class FileHandler(FileSystemEventHandler):
 
 @BOT.command()
 async def us(context, *args):
-    content, embed, attach = parse_command(context, args, region='us')
-    await choose_send(context, content, embed, attach)
+    await choose_send(context, args, region='us')
 
 @BOT.command()
 async def tck(context, *args):
-    content, embed, attach = parse_command(context, args, region='tck')
-    await choose_send(context, content, embed, attach)
+    await choose_send(context, args, region='tck')
 
 @BOT.command()
 async def ca(context, *args):
-    content, embed, attach = parse_command(context, args, region='ca')
-    await choose_send(context, content, embed, attach)
+    await choose_send(context, args, region='ca')
 
 @BOT.command()
 async def epp(context, *args):
-    content, embed, attach = parse_command(context, args, region='epp')
-    await choose_send(context, content, embed, attach)
+    await choose_send(context, args, region='epp')
 
 @BOT.command()
 async def gb(context, *args):
-    content, embed, attach = parse_command(context, args, region='gb')
-    await choose_send(context, content, embed, attach)
+    await choose_send(context, args, region='gb')
 
 @BOT.command()
 async def gbepp(context, *args):
-    content, embed, attach = parse_command(context, args, region='gbepp')
-    await choose_send(context, content, embed, attach)
+    await choose_send(context, args, region='gbepp')
 
 ### end region commands ###
 
@@ -144,19 +138,9 @@ async def cmd_help(context, *args):
     description = lelnovo.get_command_descr('listregions', BOT_PREFIXES),
 )
 async def cmd_listregions(context):
-    contents = ''
-    for _, db in DBS.items():
-        region = db['metadata']['region']
-        region_short = db['metadata']['short region']
-
-        if not (context.guild.id in DISABLED_REGIONS and region_short in DISABLED_REGIONS[context.guild.id]):
-            contents += f'`{region_short:3}` {lelnovo.get_region_emoji(region_short)}'
-            contents += f' [{region}]({db["metadata"]["base url"]})'
-            contents += '\n'
-
     embed = discord.Embed(
         title='Region List',
-        description=contents,
+        description=format_regions(context.guild.id),
         color=EMBED_COLOR,
     )
     await try_send(context, embed=embed)
@@ -250,8 +234,9 @@ async def on_command_error(context, error):
             attach = None
             # parse region-less region command with saved user region
             if 'user regions' in CFG and str(context.author.id) in CFG['user regions']:
+                region = CFG['user regions'][str(context.author.id)]
                 args = [] if len(context.message.content.split(' ')) <= 2 else context.message.content.split(' ')[2:]
-                content, embed, attach = parse_command(context, [cmd]+args, CFG['user regions'][str(context.author.id)])
+                await choose_send(context, [cmd]+args, region)
             else:
                 embed = discord.Embed(
                     title=f'No region specified for command `{cmd}`',
@@ -266,17 +251,43 @@ async def on_command_error(context, error):
                     value=format_regions(context.guild.id),
                     inline=False,
                 )
-            await choose_send(context, content, embed, attach)
+                await try_send(context, embed=embed)
         else:
             print(f'Ignoring invalid command \'{cmd}\'')
     else: raise error
 
-# choose try_send or try_send_paginated based on content, embeds, and attachment
-async def choose_send(context, content=None, embed=None, attach=None):
-    if attach: await try_send(context, content=content, embed=embed, file=attach)
+# choose try_send or try_send_paginated
+# based on content, embeds, and attachment of parse_reg_command()
+async def choose_send(context, args, region):
+    # check if region is disabled for this server
+    if context.guild.id in DISABLED_REGIONS and region in DISABLED_REGIONS[context.guild.id]:
+        print(f'Guild \'{context.guild}\' got disabled region command \'{region}\'. Ignoring...')
     else:
-        if content and not embed: await try_send(context, content=content, file=attach)
-        else:                     await try_send_paginated(context, embed, content=content)
+        cmd = REGCMD_ALIASES[args[0]] if args[0] in REGCMD_ALIASES else args[0]
+        params = args[1:]
+
+        db = DBS[region]
+        region_emoji = lelnovo.get_region_emoji(region)
+
+        # send loading message before parsing history cmd
+        # since plot generation can take a while
+        if cmd == 'history' and params:
+            embed = discord.Embed(
+                title=f'{lelnovo.get_region_emoji(region)} Loading price history...',
+                color=EMBED_COLOR,
+            )
+            embed.set_footer(text=lelnovo.get_footer(db))
+            msg = await context.send(embed=embed)
+            content, embed, attach = parse_reg_command(cmd, params, region)
+            await msg.delete()
+        else:
+            content, embed, attach = parse_reg_command(cmd, params, region)
+
+        if any([content, embed, attach]):
+            if attach: await try_send(context, content=content, embed=embed, file=attach)
+            else:
+                if content and not embed: await try_send(context, content=content, file=attach)
+                else:                     await try_send_paginated(context, embed, content=content)
 
 async def try_send(context, content=None, embed=None, file=None):
     try:
@@ -367,244 +378,251 @@ async def try_send_paginated(context, embed, content=None, limit=2048):
     except discord.errors.Forbidden:
         print(f'No permission to send to server \'{context.guild}\': \'#{context.channel}\'')
 
-def parse_command(context, args, region):
+def parse_reg_command(command, params, region):
     content = None
     embed = None
     attach = None
 
-    guild_id = context.guild.id
-    if guild_id in DISABLED_REGIONS and region in DISABLED_REGIONS[guild_id]:
-        print(f'Guild \'{context.guild}\' got disabled region command \'{region}\'. Ignoring...')
-    else:
-        command = args[0]
-        params = args[1:]
+    db = DBS[region]
+    region_emoji = lelnovo.get_region_emoji(region)
 
-        db = DBS[region]
-        region_emoji = lelnovo.get_region_emoji(db['metadata']['short region'])
+    if command == 'status':
+        embed = discord.Embed(
+            title='Database Status',
+            description=lelnovo.get_status(db, BACKUP_DIR),
+            color=EMBED_COLOR,
+        )
+        embed.set_footer(text = lelnovo.get_footer(db))
+    elif command == 'listspecs':
+        embed = discord.Embed(
+            title=f'{region_emoji} Specs List',
+            description='All specs that can be used in `search` and `specs` commands\n',
+            color=EMBED_COLOR,
+        )
+        specs = sorted(db['keys']['info'])
+        # convert {'alias': 'spec'} to {'spec': ['alias', ...]}
+        spec_aliases = {}
+        for k, v in dict(sorted(lelnovo.SPEC_ALIASES.items())).items():
+            if v in spec_aliases: spec_aliases[v].append(k)
+            else:                 spec_aliases[v] = [k]
+        # add aliases to spec
+        for i in range(len(specs)):
+            if specs[i] in spec_aliases:
+                specs[i] = '|'.join([specs[i]] + spec_aliases[specs[i]])
+        contents = '```'
+        for i in range(0, len(specs), 3):
+            contents += (' '.join([f'{spec:20}' for spec in specs[i:i+3]])+'\n')
+        contents += '```'
+        embed.add_field(name='specs', value=contents, inline=False)
 
-        if command in ['st', REGCMD_ALIASES['st']]:
+        specs = sorted(db['keys']['num_specs'])
+        # convert {'alias': 'spec'} to {'spec': ['alias', ...]}
+        spec_aliases = {}
+        for k, v in dict(sorted(lelnovo.NUM_SPEC_ALIASES.items())).items():
+            if v in spec_aliases: spec_aliases[v].append(k)
+            else:                 spec_aliases[v] = [k]
+        # add aliases to spec
+        for i in range(len(specs)):
+            if specs[i] in spec_aliases:
+                specs[i] = '|'.join([specs[i]] + spec_aliases[specs[i]])
+        contents = 'These specs contain numbers that can be used in a numeric `search` condition\n'
+        contents += '```'
+        for i in range(0, len(specs), 2):
+            contents += (' '.join([f'{spec:26}' for spec in specs[i:i+2]])+'\n')
+        contents += '```'
+        embed.add_field(name='number specs', value=contents, inline=False)
+
+        embed.set_footer(text = lelnovo.get_footer(db))
+    elif command == 'changes':
+        if db['changes']:
+            change_contents = lelnovo.format_changes(db['changes'], db['metadata']['base url'])
+            contents = ''
+            for k, v in change_contents.items():
+                cutoff_msg = f'*...and xx more. use* `changes {k}` *to view all*'
+                if k in ['added', 'removed'] and v:
+                    #contents = ''
+                    contents += f'\n**{k.capitalize()}**\n'
+                    count = 0
+                    for prod, parts in v.items():
+                        new_contents = f'{prod}\n'
+                        #if len(contents+new_contents)+len('\n'.join(parts)) < 1024-len(cutoff_msg):
+                        contents += new_contents
+                        contents += '\n'.join(parts)
+                        if parts: contents += '\n'
+                        count += 1
+                        #else:
+                        #    contents += cutoff_msg.replace('xx', f'{len(v)-count:2}')
+                        #    break
+                    #embed.add_field(name=k.capitalize(), value=contents, inline=False)
+                if k == 'changed' and v:
+                    #contents = ''
+                    contents += f'\n**Price Changed**\n'
+                    for i in range(len(v)):
+                        new_contents = f'{v[i]}\n'
+                        #if len(contents+new_contents) < 1024-len(cutoff_msg):
+                        contents += new_contents
+                        #else:
+                        #    contents += cutoff_msg.replace('xx', f'{len(v)-i:2}')
+                        #    break
+                    #embed.add_field(name=k.capitalize(), value=contents, inline=False)
+
+            old_dt = datetime.utcfromtimestamp(db['changes']['timestamp_old'])
             embed = discord.Embed(
-                title='Database Status',
-                description=lelnovo.get_status(db, BACKUP_DIR),
+                title=f'{region_emoji} Changes since {old_dt.strftime("%a %b %d")} ({lelnovo.pretty_duration((datetime.utcnow() - old_dt).total_seconds())} ago)',
+                description=contents,
                 color=EMBED_COLOR,
             )
-            embed.set_footer(text = lelnovo.get_footer(db))
-        elif command in ['ls', REGCMD_ALIASES['ls']]:
+        else:
             embed = discord.Embed(
-                title=f'{region_emoji} Specs List',
-                description='All specs that can be used in `search` and `specs` commands\n',
+                title=f'{region_emoji} No changes to show',
                 color=EMBED_COLOR,
             )
-            specs = sorted(db['keys']['info'])
-            # convert {'alias': 'spec'} to {'spec': ['alias', ...]}
-            spec_aliases = {}
-            for k, v in dict(sorted(lelnovo.SPEC_ALIASES.items())).items():
-                if v in spec_aliases: spec_aliases[v].append(k)
-                else:                 spec_aliases[v] = [k]
-            # add aliases to spec
-            for i in range(len(specs)):
-                if specs[i] in spec_aliases:
-                    specs[i] = '|'.join([specs[i]] + spec_aliases[specs[i]])
-            contents = '```'
-            for i in range(0, len(specs), 3):
-                contents += (' '.join([f'{spec:20}' for spec in specs[i:i+3]])+'\n')
-            contents += '```'
-            embed.add_field(name='specs', value=contents, inline=False)
+        embed.set_footer(text = lelnovo.get_footer(db))
+    elif command == 'search':
+        params = ' '.join(params).strip(',')
+        if params:
+            summary = ''
 
-            specs = sorted(db['keys']['num_specs'])
-            # convert {'alias': 'spec'} to {'spec': ['alias', ...]}
-            spec_aliases = {}
-            for k, v in dict(sorted(lelnovo.NUM_SPEC_ALIASES.items())).items():
-                if v in spec_aliases: spec_aliases[v].append(k)
-                else:                 spec_aliases[v] = [k]
-            # add aliases to spec
-            for i in range(len(specs)):
-                if specs[i] in spec_aliases:
-                    specs[i] = '|'.join([specs[i]] + spec_aliases[specs[i]])
-            contents = 'These specs contain numbers that can be used in a numeric `search` condition\n'
-            contents += '```'
-            for i in range(0, len(specs), 2):
-                contents += (' '.join([f'{spec:26}' for spec in specs[i:i+2]])+'\n')
-            contents += '```'
-            embed.add_field(name='number specs', value=contents, inline=False)
-
-            embed.set_footer(text = lelnovo.get_footer(db))
-        elif command in ['ch', REGCMD_ALIASES['ch']]:
-            if db['changes']:
-                change_contents = lelnovo.format_changes(db['changes'], db['metadata']['base url'])
-                contents = ''
-                for k, v in change_contents.items():
-                    cutoff_msg = f'*...and xx more. use* `changes {k}` *to view all*'
-                    if k in ['added', 'removed'] and v:
-                        #contents = ''
-                        contents += f'\n**{k.capitalize()}**\n'
-                        count = 0
-                        for prod, parts in v.items():
-                            new_contents = f'{prod}\n'
-                            #if len(contents+new_contents)+len('\n'.join(parts)) < 1024-len(cutoff_msg):
-                            contents += new_contents
-                            contents += '\n'.join(parts)
-                            if parts: contents += '\n'
-                            count += 1
-                            #else:
-                            #    contents += cutoff_msg.replace('xx', f'{len(v)-count:2}')
-                            #    break
-                        #embed.add_field(name=k.capitalize(), value=contents, inline=False)
-                    if k == 'changed' and v:
-                        #contents = ''
-                        contents += f'\n**Price Changed**\n'
-                        for i in range(len(v)):
-                            new_contents = f'{v[i]}\n'
-                            #if len(contents+new_contents) < 1024-len(cutoff_msg):
-                            contents += new_contents
-                            #else:
-                            #    contents += cutoff_msg.replace('xx', f'{len(v)-i:2}')
-                            #    break
-                        #embed.add_field(name=k.capitalize(), value=contents, inline=False)
-
-                old_dt = datetime.utcfromtimestamp(db['changes']['timestamp_old'])
+            results, error = lelnovo.search(params, db)
+            if error:
                 embed = discord.Embed(
-                    title=f'{region_emoji} Changes since {old_dt.strftime("%a %b %d")} ({lelnovo.pretty_duration((datetime.utcnow() - old_dt).total_seconds())} ago)',
-                    description=contents,
+                    title = f'{region_emoji} Search Failed',
+                    description = f'Invalid query `{params}` (check commas!)',
+                    color=EMBED_COLOR,
+                )
+            elif not results:
+                embed = discord.Embed(
+                    title = f'{region_emoji} No search results for `{params}`',
                     color=EMBED_COLOR,
                 )
             else:
                 embed = discord.Embed(
-                    title=f'{region_emoji} No changes to show',
+                    title = f'{region_emoji} Search Results for `{params}`',
                     color=EMBED_COLOR,
                 )
-            embed.set_footer(text = lelnovo.get_footer(db))
-        elif command in ['s', REGCMD_ALIASES['s']]:
-            params = ' '.join(params).strip(',')
-            if params:
-                summary = ''
+                for result in results:
+                    prod   = result[0]
+                    pn     = result[1]['part number']
+                    price  = result[1]['num_specs']['price']
+                    status = result[1]['status']
+                    spec_matches = result[2]
 
-                results, error = lelnovo.search(params, db)
-                if error:
-                    embed = discord.Embed(
-                        title = f'{region_emoji} Search Failed',
-                        description = f'Invalid query `{params}` (check commas!)',
-                        color=EMBED_COLOR,
-                    )
-                elif not results:
-                    embed = discord.Embed(
-                        title = f'{region_emoji} No search results for `{params}`',
-                        color=EMBED_COLOR,
-                    )
-                else:
-                    embed = discord.Embed(
-                        title = f'{region_emoji} Search Results for `{params}`',
-                        color=EMBED_COLOR,
-                    )
-                    for result in results:
-                        prod   = result[0]
-                        pn     = result[1]['part number']
-                        price  = result[1]['num_specs']['price']
-                        status = result[1]['status']
-                        spec_matches = result[2]
+                    contents = f'{pn} ([link]({db["metadata"]["base url"]}/p/{pn}))'
 
-                        contents = f'{pn} ([link]({db["metadata"]["base url"]}/p/{pn}))'
+                    price_str = f'{price[1]}{price[0]:.2f}'
+                    if status.lower() == 'unavailable':
+                        contents += f' **~~{price_str}~~ (unavailable)**'
+                    elif status.lower() == 'customize':
+                        contents += f' **{price_str} (customize)**'
+                    else:
+                        contents += f' **{price_str}**'
 
-                        price_str = f'{price[1]}{price[0]:.2f}'
-                        if status.lower() == 'unavailable':
-                            contents += f' **~~{price_str}~~ (unavailable)**'
-                        elif status.lower() == 'customize':
-                            contents += f' **{price_str} (customize)**'
-                        else:
-                            contents += f' **{price_str}**'
+                    contents += f'\n {lelnovo.part_listentry(result[1], show_pn=False, show_price=False, fmt="*")}\n'
 
-                        contents += f'\n {lelnovo.part_listentry(result[1], show_pn=False, show_price=False, fmt="*")}\n'
-
-                        added = [] # keep track of added spec matches to avoid duplicates
-                        spacing = max([len(k[0]) for k in spec_matches])
-                        for match in result[2]:
-                            if match[0] not in added:
-                                spec, value = match
-                                if spec == 'processor': value = lelnovo.cleanup_cpu(value)
-                                contents += lelnovo.multiline(f'{spec:{spacing}}  {value}', indent=spacing+2) + '\n'
-                                added.append(spec)
-                        embed.add_field(
-                            name = result[1]['name'],
-                            value = contents,
-                            inline = False,
-                        )
-
-                    summary = f'Found **{len(results)}** result{"s" if len(results)!=1 else ""} for `{params}`'
+                    added = [] # keep track of added spec matches to avoid duplicates
+                    spacing = max([len(k[0]) for k in spec_matches])
+                    for match in result[2]:
+                        if match[0] not in added:
+                            spec, value = match
+                            if spec == 'processor': value = lelnovo.cleanup_cpu(value)
+                            contents += lelnovo.multiline(f'{spec:{spacing}}  {value}', indent=spacing+2) + '\n'
+                            added.append(spec)
                     embed.add_field(
-                        name = '\u200b',
-                        value = summary,
+                        name = result[1]['name'],
+                        value = contents,
+                        inline = False,
                     )
-                embed.set_footer(text = lelnovo.get_footer(db))
-            else:
-                content = '```\n'+''.join(lelnovo.get_command_descr('reg_search', BOT_PREFIXES))+'```'
-        elif command in ['sp', REGCMD_ALIASES['sp']]:
-            params = ' '.join(params)
-            if params:
-                specs = []
-                words = re.split('\s+', params, 1)
-                part_num = words[0]
-                # user-provided specs
-                if len(words) > 1: specs = [s.strip() for s in words[1].split(',')]
 
-                info, ret_specs = lelnovo.get_specs(part_num, db, specs)
-                # Found part
-                if info:
+                summary = f'Found **{len(results)}** result{"s" if len(results)!=1 else ""} for `{params}`'
+                embed.add_field(
+                    name = '\u200b',
+                    value = summary,
+                )
+            embed.set_footer(text = lelnovo.get_footer(db))
+        else:
+            content = '```\n'+''.join(lelnovo.get_command_descr('reg_search', BOT_PREFIXES))+'```'
+    elif command == 'specs':
+        params = ' '.join(params)
+        if params:
+            specs = []
+            words = re.split('\s+', params, 1)
+            part_num = words[0]
+            # user-provided specs
+            if len(words) > 1: specs = [s.strip() for s in words[1].split(',')]
+
+            info, ret_specs = lelnovo.get_specs(part_num, db, specs)
+            # Found part
+            if info:
+                embed = discord.Embed(
+                    title=f'{region_emoji} Specs for {info["name"]}',
+                    description=lelnovo.format_specs(db, info, ret_specs),
+                    color=EMBED_COLOR,
+                )
+            else:
+                embed = discord.Embed(
+                    title=f'{region_emoji} Specs for `{part_num}` not found',
+                    description=f'Check that the part number is valid. Discontinued or upcoming products are not in database.',
+                    color=EMBED_COLOR,
+                )
+
+            embed.set_footer(text = lelnovo.get_footer(db))
+        else:
+            content = '```\n'+''.join(lelnovo.get_command_descr('reg_specs', BOT_PREFIXES))+'```'
+    elif command == 'history':
+        if params:
+            if BACKUP_DIR:
+                pn = ''.join(params)
+                # collect backup dbs for region
+                dbs = [db]
+                for f in os.scandir(BACKUP_DIR):
+                    if f.name.startswith(f'db_{region}_') and f.name.endswith('.json'):
+                        with open(f.path, 'r') as f:
+                            js = f.read()
+                            dbs.append(json.loads(js))
+                dbs = sorted(dbs, key=lambda db: db['metadata']['timestamp'])
+
+                data, part = lelnovo.get_history(pn, dbs)
+                if part:
+                    bytes = lelnovo.plot_history(data, part)
+                    bytes.seek(0)
+                    attach = discord.File(bytes, filename='plot.png')
+
                     embed = discord.Embed(
-                        title=f'{region_emoji} Specs for {info["name"]}',
-                        description=lelnovo.format_specs(db, info, ret_specs),
+                        title=f'{region_emoji} Price history for {part["name"]}',
+                        description=lelnovo.part_listentry(part, base_url=db['metadata']['base url']),
                         color=EMBED_COLOR,
                     )
+                    embed.set_image(url='attachment://plot.png')
                 else:
                     embed = discord.Embed(
-                        title=f'{region_emoji} Specs for `{part_num}` not found',
+                        title=f'{region_emoji} Price history for `{pn}` not found',
                         description=f'Check that the part number is valid. Discontinued or upcoming products are not in database.',
                         color=EMBED_COLOR,
                     )
-
-                embed.set_footer(text = lelnovo.get_footer(db))
             else:
-                content = '```\n'+''.join(lelnovo.get_command_descr('reg_specs', BOT_PREFIXES))+'```'
-        elif command in ['hi', REGCMD_ALIASES['hi']]:
-            if params:
-                if BACKUP_DIR:
-                    pn = ''.join(params)
-                    # collect backup dbs for region
-                    dbs = [db]
-                    for f in os.scandir(BACKUP_DIR):
-                        if f.name.startswith(f'db_{region}_') and f.name.endswith('.json'):
-                            with open(f.path, 'r') as f:
-                                js = f.read()
-                                dbs.append(json.loads(js))
-                    dbs = sorted(dbs, key=lambda db: db['metadata']['timestamp'])
-
-                    data, part = lelnovo.get_history(pn, dbs)
-                    if part:
-                        bytes = lelnovo.plot_history(data, part)
-                        bytes.seek(0)
-                        attach = discord.File(bytes, filename='plot.png')
-
-                        embed = discord.Embed(
-                            title=f'{region_emoji} Price history for {part["name"]}',
-                            description=lelnovo.part_listentry(part, base_url=db['metadata']['base url']),
-                            color=EMBED_COLOR,
-                        )
-                        embed.set_image(url='attachment://plot.png')
-                    else:
-                        embed = discord.Embed(
-                            title=f'{region_emoji} Price history for `{pn}` not found',
-                            description=f'Check that the part number is valid. Discontinued or upcoming products are not in database.',
-                            color=EMBED_COLOR,
-                        )
-                else:
-                    embed = discord.Embed(
-                        title=f'{region_emoji} Price history failed',
-                        description=f'Backup database directory for `{region}` not specified. Contact bot administrator to enable this feature.',
-                        color=EMBED_COLOR,
-                    )
-                embed.set_footer(text = lelnovo.get_footer(db))
-            else: content = '```\n'+''.join(lelnovo.get_command_descr('reg_history', BOT_PREFIXES))+'```'
+                embed = discord.Embed(
+                    title=f'{region_emoji} Price history failed',
+                    description=f'Backup database directory for `{region}` not specified. Contact bot administrator to enable this feature.',
+                    color=EMBED_COLOR,
+                )
+            embed.set_footer(text = lelnovo.get_footer(db))
+        else: content = '```\n'+''.join(lelnovo.get_command_descr('reg_history', BOT_PREFIXES))+'```'
+    else:
+        print(f'Ignoring invalid region command \'{command}\'')
 
     return content, embed, attach
+
+def format_regions(guild_id):
+    contents = ''
+    for _, db in DBS.items():
+        region = db['metadata']['region']
+        region_short = db['metadata']['short region']
+
+        if not (guild_id in DISABLED_REGIONS and region_short in DISABLED_REGIONS[guild_id]):
+            contents += f'`{region_short:5}` {lelnovo.get_region_emoji(region_short)}'
+            contents += f' [{region}]({db["metadata"]["base url"]})'
+            contents += '\n'
+    return contents
 
 if __name__ == '__main__':
     token = CFG['bot']['discord_token']
