@@ -415,43 +415,49 @@ def parse_command(context, args, region):
 
             embed.set_footer(text = lelnovo.get_footer(db))
         elif command in ['ch', REGCMD_ALIASES['ch']]:
-            change_contents = lelnovo.format_changes(db['changes'], db['metadata']['base url'])
-            contents = ''
-            for k, v in change_contents.items():
-                cutoff_msg = f'*...and xx more. use* `changes {k}` *to view all*'
-                if k in ['added', 'removed'] and v:
-                    #contents = ''
-                    contents += f'\n**{k.capitalize()}**\n'
-                    count = 0
-                    for prod, parts in v.items():
-                        new_contents = f'{prod}\n'
-                        #if len(contents+new_contents)+len('\n'.join(parts)) < 1024-len(cutoff_msg):
-                        contents += new_contents
-                        contents += '\n'.join(parts)
-                        if parts: contents += '\n'
-                        count += 1
-                        #else:
-                        #    contents += cutoff_msg.replace('xx', f'{len(v)-count:2}')
-                        #    break
-                    #embed.add_field(name=k.capitalize(), value=contents, inline=False)
-                if k == 'changed' and v:
-                    #contents = ''
-                    contents += f'\n**Price Changed**\n'
-                    for i in range(len(v)):
-                        new_contents = f'{v[i]}\n'
-                        #if len(contents+new_contents) < 1024-len(cutoff_msg):
-                        contents += new_contents
-                        #else:
-                        #    contents += cutoff_msg.replace('xx', f'{len(v)-i:2}')
-                        #    break
-                    #embed.add_field(name=k.capitalize(), value=contents, inline=False)
+            if db['changes']:
+                change_contents = lelnovo.format_changes(db['changes'], db['metadata']['base url'])
+                contents = ''
+                for k, v in change_contents.items():
+                    cutoff_msg = f'*...and xx more. use* `changes {k}` *to view all*'
+                    if k in ['added', 'removed'] and v:
+                        #contents = ''
+                        contents += f'\n**{k.capitalize()}**\n'
+                        count = 0
+                        for prod, parts in v.items():
+                            new_contents = f'{prod}\n'
+                            #if len(contents+new_contents)+len('\n'.join(parts)) < 1024-len(cutoff_msg):
+                            contents += new_contents
+                            contents += '\n'.join(parts)
+                            if parts: contents += '\n'
+                            count += 1
+                            #else:
+                            #    contents += cutoff_msg.replace('xx', f'{len(v)-count:2}')
+                            #    break
+                        #embed.add_field(name=k.capitalize(), value=contents, inline=False)
+                    if k == 'changed' and v:
+                        #contents = ''
+                        contents += f'\n**Price Changed**\n'
+                        for i in range(len(v)):
+                            new_contents = f'{v[i]}\n'
+                            #if len(contents+new_contents) < 1024-len(cutoff_msg):
+                            contents += new_contents
+                            #else:
+                            #    contents += cutoff_msg.replace('xx', f'{len(v)-i:2}')
+                            #    break
+                        #embed.add_field(name=k.capitalize(), value=contents, inline=False)
 
-            old_dt = datetime.utcfromtimestamp(db['changes']['timestamp_old'])
-            embed = discord.Embed(
-                title=f'{region_emoji} Changes since {old_dt.strftime("%a %b %d")} ({lelnovo.pretty_duration((datetime.utcnow() - old_dt).total_seconds())} ago)',
-                description=contents,
-                color=EMBED_COLOR,
-            )
+                old_dt = datetime.utcfromtimestamp(db['changes']['timestamp_old'])
+                embed = discord.Embed(
+                    title=f'{region_emoji} Changes since {old_dt.strftime("%a %b %d")} ({lelnovo.pretty_duration((datetime.utcnow() - old_dt).total_seconds())} ago)',
+                    description=contents,
+                    color=EMBED_COLOR,
+                )
+            else:
+                embed = discord.Embed(
+                    title=f'{region_emoji} No changes to show',
+                    color=EMBED_COLOR,
+                )
             embed.set_footer(text = lelnovo.get_footer(db))
         elif command in ['s', REGCMD_ALIASES['s']]:
             params = ' '.join(params).strip(',')
