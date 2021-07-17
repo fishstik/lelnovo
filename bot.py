@@ -511,11 +511,13 @@ def parse_command(context, args, region):
 
                         price_str = f'{price[1]}{price[0]:.2f}'
                         if status.lower() == 'unavailable':
-                            contents += f' **~~{price_str}~~ (unavailable)**\n'
+                            contents += f' **~~{price_str}~~ (unavailable)**'
                         elif status.lower() == 'customize':
-                            contents += f' **{price_str} (customize)**\n'
+                            contents += f' **{price_str} (customize)**'
                         else:
-                            contents += f' **{price_str}**\n'
+                            contents += f' **{price_str}**'
+
+                        contents += f'\n {lelnovo.part_listentry(result[1], show_pn=False, show_price=False, fmt="*")}\n'
 
                         added = [] # keep track of added spec matches to avoid duplicates
                         spacing = max([len(k[0]) for k in spec_matches])
