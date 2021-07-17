@@ -10,6 +10,12 @@ import os
 from datetime import datetime,timezone,timedelta
 from pprint import pprint
 
+import io
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from dateutil.rrule import DAILY
+
 def pretty_duration(time_diff_secs):
     weeks_per_month = 365.242 / 12 / 7
     intervals = [('minute', 60), ('hour', 60), ('day', 24), ('week', 7),
@@ -169,13 +175,6 @@ def get_specs(part_num, db, specs=[]):
                     return info, ret_specs
     return None, None
 
-def multiline(line, indent, max_width=73):
-    wrapper = textwrap.TextWrapper(
-        width             = max_width,
-        subsequent_indent = ' '*indent,
-    )
-    return '\n'.join([f'`{l}`' for l in wrapper.fill(line).split('\n')])
-
 # takes (info, specs) return value from get_specs
 def format_specs(db, info, specs):
     contents = ''
@@ -212,6 +211,13 @@ def format_specs(db, info, specs):
     else: contents += f'`[no valid specs to list]`\n'
 
     return contents
+
+def multiline(line, indent, max_width=73):
+    wrapper = textwrap.TextWrapper(
+        width             = max_width,
+        subsequent_indent = ' '*indent,
+    )
+    return '\n'.join([f'`{l}`' for l in wrapper.fill(line).split('\n')])
 
 def format_changes(changes, base_url=None):
     shown_changed_specs = ['price', 'status', 'shipping']
@@ -303,6 +309,25 @@ def format_changes(changes, base_url=None):
 
     return ret_contents
 
+def part_listentry(p, base_url=None, name=False):
+    if base_url: pn = f'{p["part number"]} ([link]({base_url}/p/{p["part number"]}))'
+    else:        pn = f'{p["part number"]}'
+    price = f'{p["num_specs"]["price"][1]}{p["num_specs"]["price"][0]:.2f}'
+    #res = f'{p["num_specs"]["display res horizontal"][0]}x{p["num_specs"]["display res vertical"][0]}' if "display res vertical" in p["num_specs"] else ""
+    res = f' {p["num_specs"]["display res vertical"][0]}p' if "display res vertical" in p["num_specs"] else ""
+    proc = f'{cleanup_cpu(p["processor"], 2)}'
+    if 'graphics' in p and 'discrete' in p['graphics'].lower(): proc += f', {cleanup_gpu(p["graphics"], 2)}'
+    ret = (
+        f'{pn}'
+        f' `{price}'
+        f'{" "+str(int(p["num_specs"]["memory"][0]))+p["num_specs"]["memory"][1] if "memory" in p["num_specs"] else ""}'
+        f'{","+str(int(p["num_specs"]["storage"][0]))+p["num_specs"]["storage"][1] if "storage" in p["num_specs"] else ""}'
+        f'{res}'
+        f' {proc}`'
+    )
+    if name: ret += f' {p["name"]}'
+    return ret
+
 # level 0: Intel Core i5-1135G7, AMD Ryzen 5 4500U
 # level 1:       Core i5-1135G7,     Ryzen 5 4500U
 # level 2:            i5-1135G7,             4500U
@@ -350,24 +375,70 @@ def cleanup_gpu(gpu, level=0):
         gpu = re.sub('[RG]TX\s?', '' , gpu)
     return gpu
 
-def part_listentry(p, base_url=None, name=False):
-    if base_url: pn = f'{p["part number"]} ([link]({base_url}/p/{p["part number"]}))'
-    else:        pn = f'{p["part number"]}'
-    price = f'{p["num_specs"]["price"][1]}{p["num_specs"]["price"][0]:.2f}'
-    #res = f'{p["num_specs"]["display res horizontal"][0]}x{p["num_specs"]["display res vertical"][0]}' if "display res vertical" in p["num_specs"] else ""
-    res = f' {p["num_specs"]["display res vertical"][0]}p' if "display res vertical" in p["num_specs"] else ""
-    proc = f'{cleanup_cpu(p["processor"], 2)}'
-    if 'graphics' in p and 'discrete' in p['graphics'].lower(): proc += f', {cleanup_gpu(p["graphics"], 2)}'
-    ret = (
-        f'{pn}'
-        f' `{price}'
-        f'{" "+str(int(p["num_specs"]["memory"][0]))+p["num_specs"]["memory"][1] if "memory" in p["num_specs"] else ""}'
-        f'{","+str(int(p["num_specs"]["storage"][0]))+p["num_specs"]["storage"][1] if "storage" in p["num_specs"] else ""}'
-        f'{res}'
-        f' {proc}`'
-    )
-    if name: ret += f' {p["name"]}'
-    return ret
+# returns ([(dt, price) ...], part_dict)
+def get_history(pn, dbs):
+    data = []
+    part = None
+
+    for db in dbs:
+        dt = datetime.utcfromtimestamp(db['metadata']['timestamp'])
+        found = False
+        for brand, prods in db['data'].items():
+            if found: break
+            for prod, parts in prods.items():
+                if found: break
+                for p in parts:
+                    if found: break
+                    if pn == p['part number']:
+                        #print(dt.strftime('%c'), pn, p['num_specs']['price'][0])
+                        data.append((dt, p['num_specs']['price'][0]))
+                        part = p
+                        found = True
+        if not found: data.append((dt, -100))
+
+    return data, part
+
+# returns binary stream of plot image
+def plot_history(data, part):
+    if part:
+        curr = part['num_specs']['price'][1]
+
+        x = np.array([d[0] for d in data])
+        y = np.array([d[1] for d in data])
+        y_masked = np.ma.masked_where(y <= 0, y)
+
+        plt.rcParams['font.size'] = 12
+        fig = plt.figure(figsize=(8,5))
+        ax = plt.axes()
+
+        locator = mdates.AutoDateLocator()
+        locator.intervald[DAILY] = [2]
+        formatter = mdates.ConciseDateFormatter(locator)
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(formatter)
+
+        ax.set_ylim(bottom=0)
+        ylim = round(max(y))+200-(round(max(y))%100)
+        ax.set_yticks(np.arange(0, ylim+1, ylim/5))
+        ax.yaxis.set_major_formatter(curr+'{x:1.0f}')
+
+        plt.text(x=x[0], y=y[0]-ylim/5/3, s=f'{curr}{round(y[0])}', **{'fontweight': 'bold'})
+        for i in range(1, len(y)):
+            #print(y[i], y[i-1], abs(y[i]/y[i-1]-1))
+            if y[i] != -100 and abs(y[i]/y[i-1]-1) > 0.05:
+                plt.text(x=x[i], y=y[i]-ylim/5/3, s=f'{curr}{round(y[i])}', **{'fontweight': 'bold'})
+
+        plt.title(part['name'])
+        plt.scatter(x, y)
+        plt.plot(x, y_masked)
+        plt.grid(axis='x')
+
+        bytes = io.BytesIO()
+        plt.savefig(bytes, format='png', bbox_inches='tight', dpi=100)
+        plt.close()
+
+        return bytes
+    else: return None
 
 def get_region_emoji(region_short):
     if region_short in REGION_EMOJIS:
@@ -430,6 +501,7 @@ def get_usage_str(prefixes):
         f'  {" "             :14}    {COMMAND_BRIEFS["reg_search"]}\n'
         f'  {"sp|specs prodnum [spec[, spec, ...]]"}\n'
         f'  {" "             :14}    {COMMAND_BRIEFS["reg_specs"]}\n'
+        f'  {"hi|history"    :14}    {COMMAND_BRIEFS["reg_history"]}\n'
         f'\n'
         f'examples:\n'
         f'  "{prefix} listregions"\n'
@@ -438,6 +510,7 @@ def get_usage_str(prefixes):
         f'  "{prefix} us search x1e, price<=1400, display:fhd"\n'
         f'  "{prefix} us specs 20TK001EUS"\n'
         f'  "{prefix} us specs 20TK001EUS price, display, memory"\n'
+        f'  "{prefix} us history 20TK001EUS"\n'
     )
 
 def get_command_descr(cmd, prefix):
@@ -527,6 +600,16 @@ def get_command_descr(cmd, prefix):
             f'  "{prefix} us specs 20TK001EUS"\n'
             f'  "{prefix} us specs 20TK001EUS price, display, memory"\n'
         )
+    elif cmd == 'reg_history':
+        ret_str = (
+            f'usage: {prefix} [region] history [prodnum]\n'
+            f'       {prefix} [region] hi      [prodnum]\n'
+            f'\n'
+            f'{COMMAND_BRIEFS["reg_history"]}\n',
+            f'\n'
+            f'example:\n'
+            f'  "{prefix} us history 20TK001EUS"\n'
+        )
     else:
         ret_str = ''
     return ret_str
@@ -540,6 +623,7 @@ COMMAND_BRIEFS = {
     'reg_listspecs': 'list valid specs and num_specs',
     'reg_search':    'search for products with queries separated by commas',
     'reg_specs':     'list specs for a given product number',
+    'reg_history':   'show price history for a given product number',
 }
 
 REGION_EMOJIS = {

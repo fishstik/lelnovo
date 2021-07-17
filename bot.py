@@ -29,15 +29,18 @@ else:
     CFG.set('bot', 'discord_token', '')
     CFG.set('bot', 'prefix', '!lenovo, !ln')
     CFG.set('bot', 'embed_color', 'e41c1c')
+    CFG.set('bot', 'db_dir', '')
+    CFG.set('bot', 'backup_dir', '')
     with open(CFG_FILENAME, 'w') as cfg_file: CFG.write(cfg_file)
     sys.exit(f'Created template \'{CFG_FILENAME}\'. Add bot token and restart.')
 
-# TODO: move these to config
-DB_DIR = './dbs'
+DB_DIR = CFG['bot']['db_dir']
+BACKUP_DIR = CFG['bot']['backup_dir']
 BOT_PREFIXES = []
 for prefix in CFG['bot']['prefixes'].split(','):
     BOT_PREFIXES.append(prefix.strip())
 EMBED_COLOR = int(CFG['bot']['embed_color'], 16)
+# TODO: move to config
 DISABLED_REGIONS = {
     #851248442864173057: ['tck'], # lbt2
     361360173530480640: ['tck', 'epp', 'gbepp'], # SAL
@@ -55,6 +58,7 @@ REGCMD_ALIASES = {
     'ch': 'changes',
     's':  'search',
     'sp': 'specs',
+    'hi': 'history',
 }
 
 BOT = discord.ext.commands.Bot(
@@ -82,33 +86,45 @@ class FileHandler(FileSystemEventHandler):
 
 @BOT.command()
 async def us(context, *args):
-    embed = parse_command(context, args, region='us')
-    if embed: await try_send_paginated(context, embed)
+    embed, attach = parse_command(context, args, region='us')
+    if embed:
+        if attach: await try_send(context, embed=embed, file=attach)
+        else:      await try_send_paginated(context, embed)
 
 @BOT.command()
 async def tck(context, *args):
-    embed = parse_command(context, args, region='tck')
-    if embed: await try_send_paginated(context, embed)
+    embed, attach = parse_command(context, args, region='tck')
+    if embed:
+        if attach: await try_send(context, embed=embed, file=attach)
+        else:      await try_send_paginated(context, embed)
 
 @BOT.command()
 async def ca(context, *args):
-    embed = parse_command(context, args, region='ca')
-    if embed: await try_send_paginated(context, embed)
+    embed, attach = parse_command(context, args, region='ca')
+    if embed:
+        if attach: await try_send(context, embed=embed, file=attach)
+        else:      await try_send_paginated(context, embed)
 
 @BOT.command()
 async def epp(context, *args):
-    embed = parse_command(context, args, region='epp')
-    if embed: await try_send_paginated(context, embed)
+    embed, attach = parse_command(context, args, region='epp')
+    if embed:
+        if attach: await try_send(context, embed=embed, file=attach)
+        else:      await try_send_paginated(context, embed)
 
 @BOT.command()
 async def gb(context, *args):
-    embed = parse_command(context, args, region='gb')
-    if embed: await try_send_paginated(context, embed)
+    embed, attach = parse_command(context, args, region='gb')
+    if embed:
+        if attach: await try_send(context, embed=embed, file=attach)
+        else:      await try_send_paginated(context, embed)
 
 @BOT.command()
 async def gbepp(context, *args):
-    embed = parse_command(context, args, region='gbepp')
-    if embed: await try_send_paginated(context, embed)
+    embed, attach = parse_command(context, args, region='gbepp')
+    if embed:
+        if attach: await try_send(context, embed=embed, file=attach)
+        else:      await try_send_paginated(context, embed)
 
 ### end region commands ###
 
@@ -231,10 +247,11 @@ async def on_command_error(context, error):
 
         if cmd in REGCMD_ALIASES: cmd = REGCMD_ALIASES[cmd]
         if cmd in REGCMD_ALIASES.values():
+            attach = None
             # parse region-less region command with saved user region
             if 'user regions' in CFG and str(context.author.id) in CFG['user regions']:
                 args = [] if len(context.message.content.split(' ')) <= 2 else context.message.content.split(' ')[2:]
-                embed = parse_command(context, [cmd]+args, CFG['user regions'][str(context.author.id)])
+                embed, attach = parse_command(context, [cmd]+args, CFG['user regions'][str(context.author.id)])
             else:
                 embed = discord.Embed(
                     title=f'No region specified for command `{cmd}`',
@@ -249,18 +266,19 @@ async def on_command_error(context, error):
                     value=format_regions(context.guild.id),
                     inline=False,
                 )
-            await try_send_paginated(context, embed=embed)
+            if attach: await try_send(context, embed=embed, file=attach)
+            else:      await try_send_paginated(context, embed)
         else:
             print(f'Ignoring invalid command \'{cmd}\'')
     else: raise error
 
-async def try_send(context, content=None, embed=None):
+async def try_send(context, content=None, embed=None, file=None):
     try:
-        await context.send(content=content, embed=embed)
+        await context.send(content=content, embed=embed, file=file)
     except discord.errors.Forbidden:
         print(f'No permission to send to server \'{context.guild}\': \'#{context.channel}\'')
 
-async def try_send_paginated(context, embed, limit=2048):
+async def try_send_paginated(context, embed, attach=None, limit=2048):
     msg = context.message.content
 
     embeds_splitdescr = []
@@ -357,6 +375,7 @@ def format_regions(guild_id):
 def parse_command(context, args, region):
     guild_id = context.guild.id
     embed = None
+    attach = None
 
     if guild_id in DISABLED_REGIONS and region in DISABLED_REGIONS[guild_id]:
         print(f'Guild \'{context.guild}\' got disabled region command \'{region}\'. Ignoring...')
@@ -543,8 +562,38 @@ def parse_command(context, args, region):
                     )
 
                 embed.set_footer(text = lelnovo.get_footer(db))
+        elif command in ['hi', REGCMD_ALIASES['hi']]:
+            if params:
+                pn = ''.join(params)
+                # collect backup dbs for region
+                dbs = [db]
+                for f in os.scandir(BACKUP_DIR):
+                    if f.name.startswith(f'db_{region}_') and f.name.endswith('.json'):
+                        with open(f.path, 'r') as f:
+                            js = f.read()
+                            dbs.append(json.loads(js))
+                dbs = sorted(dbs, key=lambda db: db['metadata']['timestamp'])
 
-    return embed
+                data, part = lelnovo.get_history(pn, dbs)
+                if part:
+                    bytes = lelnovo.plot_history(data, part)
+                    bytes.seek(0)
+                    attach = discord.File(bytes, filename='plot.png')
+
+                    embed = discord.Embed(
+                        title=f'{region_emoji} Price history for {part["name"]}',
+                        description=lelnovo.part_listentry(part, db['metadata']['base url']),
+                        color=EMBED_COLOR,
+                    )
+                    embed.set_image(url='attachment://plot.png')
+                else:
+                    embed = discord.Embed(
+                        title=f'{region_emoji} Price history for `{pn}` not found',
+                        description=f'Check that the part number is valid. Discontinued or upcoming products are not in database.',
+                        color=EMBED_COLOR,
+                    )
+
+    return embed, attach
 
 if __name__ == '__main__':
     token = CFG['bot']['discord_token']
