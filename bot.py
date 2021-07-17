@@ -584,7 +584,7 @@ def parse_command(context, args, region):
 
                     embed = discord.Embed(
                         title=f'{region_emoji} Price history for {part["name"]}',
-                        description=lelnovo.part_listentry(part, db['metadata']['base url']),
+                        description=lelnovo.part_listentry(part, base_url=db['metadata']['base url']),
                         color=EMBED_COLOR,
                     )
                     embed.set_image(url='attachment://plot.png')
