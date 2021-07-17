@@ -455,9 +455,8 @@ def get_status(db, backup_dir=None):
     if backup_dir:
         for f in os.scandir(backup_dir):
             if f.name.startswith(f'db_{db["metadata"]["short region"]}_') and f.name.endswith('.json'):
-                with open(f.path, 'r') as f:
-                    js = f.read()
-                    backup_tss.append(json.loads(js)['metadata']['timestamp'])
+                # use mtime instead of json timestamp (much faster)
+                backup_tss.append(f.stat().st_mtime)
     backup_tss = sorted(backup_tss)
 
     emoji = get_region_emoji(db['metadata']['short region'])
