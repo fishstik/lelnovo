@@ -448,14 +448,29 @@ def get_region_emoji(region_short):
     else:
         return None
 
-def get_status(db):
+def get_status(db, backup_dir=None):
     string = ''
+
+    backup_tss = []
+    if backup_dir:
+        for f in os.scandir(backup_dir):
+            if f.name.startswith(f'db_{db["metadata"]["short region"]}_') and f.name.endswith('.json'):
+                with open(f.path, 'r') as f:
+                    js = f.read()
+                    backup_tss.append(json.loads(js)['metadata']['timestamp'])
+    backup_tss = sorted(backup_tss)
 
     emoji = get_region_emoji(db['metadata']['short region'])
     if emoji: string += f' {emoji}'
     string += f' **{db["metadata"]["region"]}**\n'
 
     string += f'**{db["metadata"]["total"]}** products total across **{len(db["data"].keys())}** series\n'
+
+    if backup_tss:
+        dt = datetime.utcfromtimestamp(backup_tss[0])
+        string += f'**{len(backup_tss)}** historical databases saved since {dt.strftime("%b %d %Y")} ({pretty_duration((datetime.utcnow() - dt).total_seconds())} ago)\n'
+    else: string += f'No historical databases saved\n'
+
     return string
 
 def get_footer(db):
@@ -515,41 +530,41 @@ def get_usage_str(prefixes):
         f'  "{prefix} us history 20TK001EUS"\n'
     )
 
-def get_command_descr(cmd, prefix):
+def get_command_descr(cmd, prefixes):
     if cmd == 'setregion':
         ret_str = (
-            f'usage: {prefix} setregion [region / \'cl\'|\'clear\']\n'
-            f'       {prefix} sr        [region / \'cl\'|\'clear\']\n'
+            f'usage: {"|".join(prefixes)} setregion [region / \'cl\'|\'clear\']\n'
+            f'       {"|".join(prefixes)} sr        [region / \'cl\'|\'clear\']\n'
             f'\n'
             f'{COMMAND_BRIEFS["setregion"]}\n'
             f'\n'
-            f'use \'{prefix} setregion\' to view currently saved region\n'
-            f'use \'{prefix} setregion clear\' to clear saved region\n'
-            f'use \'{prefix} listregions\' to view valid regions\n'
+            f'use \'{prefixes[0]} setregion\' to view currently saved region\n'
+            f'use \'{prefixes[0]} setregion clear\' to clear saved region\n'
+            f'use \'{prefixes[0]} listregions\' to view valid regions\n'
             f'\n'
             f'examples:\n'
-            f'  "{prefix} setregion"\n'
-            f'  "{prefix} setregion tck"\n'
-            f'  "{prefix} setregion clear"\n'
+            f'  "{prefixes[0]} setregion"\n'
+            f'  "{prefixes[0]} setregion tck"\n'
+            f'  "{prefixes[0]} setregion clear"\n'
         )
     elif cmd == 'listregions':
         ret_str = (
-            f'usage: {prefix} listregions\n'
-            f'       {prefix} lr\n'
+            f'usage: {"|".join(prefixes)} listregions\n'
+            f'       {"|".join(prefixes)} lr\n'
             f'\n'
             f'{COMMAND_BRIEFS["listregions"]}'
         )
     elif cmd == 'status':
         ret_str = (
-            f'usage: {prefix} status\n'
-            f'       {prefix} st\n'
+            f'usage: {"|".join(prefixes)} status\n'
+            f'       {"|".join(prefixes)} st\n'
             f'\n'
             f'{COMMAND_BRIEFS["status"]}'
             # add reg_status help since it's inaccessible
             f'\n'
             f'\n'
-            f'usage: {prefix} [region] status\n'
-            f'       {prefix} [region] st\n'
+            f'usage: {"|".join(prefixes)} [region] status\n'
+            f'       {"|".join(prefixes)} [region] st\n'
             f'\n'
             f'{COMMAND_BRIEFS["reg_status"]}'
         )
@@ -557,22 +572,22 @@ def get_command_descr(cmd, prefix):
         ret_str = COMMAND_BRIEFS['reg_status'] # inaccessible
     elif cmd == 'reg_listspecs':
         ret_str = (
-            f'usage: {prefix} [region] listspecs\n'
-            f'       {prefix} [region] ls\n'
+            f'usage: {"|".join(prefixes)} [region] listspecs\n'
+            f'       {"|".join(prefixes)} [region] ls\n'
             f'\n'
             f'list valid specs and num_specs for use in \'search\' and \'specs\' commands'
         )
     elif cmd == 'reg_changes':
         ret_str = (
-            f'usage: {prefix} [region] changes\n'
-            f'       {prefix} [region] ch\n'
+            f'usage: {"|".join(prefixes)} [region] changes\n'
+            f'       {"|".join(prefixes)} [region] ch\n'
             f'\n'
             f'show additions, removals, and price changes since previous database update'
         )
     elif cmd == 'reg_search':
         ret_str = (
-            f'usage: {prefix} [region] search [query[, query, ...]]\n'
-            f'       {prefix} [region] s      [query[, query, ...]]\n'
+            f'usage: {"|".join(prefixes)} [region] search [query[, query, ...]]\n'
+            f'       {"|".join(prefixes)} [region] s      [query[, query, ...]]\n'
             f'\n'
             f'{COMMAND_BRIEFS["reg_search"]}\n'
             f'\n'
@@ -587,30 +602,30 @@ def get_command_descr(cmd, prefix):
             f'                  use \'listspecs\' region command to view valid num_specs.\n'
             f'\n'
             f'example:\n'
-            f'  "{prefix} us search x1e, price<=1400, display:fhd"\n'
+            f'  "{prefixes[0]} us search x1e, price<=1400, display:fhd"\n'
         )
     elif cmd == 'reg_specs':
         ret_str = (
-            f'usage: {prefix} [region] specs [prodnum] [spec[, spec, ...]]\n'
-            f'       {prefix} [region] sp    [prodnum] [spec[, spec, ...]]\n'
+            f'usage: {"|".join(prefixes)} [region] specs [prodnum] [spec[, spec, ...]]\n'
+            f'       {"|".join(prefixes)} [region] sp    [prodnum] [spec[, spec, ...]]\n'
             f'\n'
             f'{COMMAND_BRIEFS["reg_specs"]}\n',
             f'if specs are given, filters result by the given comma-separated specs.\n'
             f'use \'listspecs\' to view valid specs.\n'
             f'\n'
             f'examples:\n'
-            f'  "{prefix} us specs 20TK001EUS"\n'
-            f'  "{prefix} us specs 20TK001EUS price, display, memory"\n'
+            f'  "{prefixes[0]} us specs 20TK001EUS"\n'
+            f'  "{prefixes[0]} us specs 20TK001EUS price, display, memory"\n'
         )
     elif cmd == 'reg_history':
         ret_str = (
-            f'usage: {prefix} [region] history [prodnum]\n'
-            f'       {prefix} [region] hi      [prodnum]\n'
+            f'usage: {"|".join(prefixes)} [region] history [prodnum]\n'
+            f'       {"|".join(prefixes)} [region] hi      [prodnum]\n'
             f'\n'
             f'{COMMAND_BRIEFS["reg_history"]}\n',
             f'\n'
             f'example:\n'
-            f'  "{prefix} us history 20TK001EUS"\n'
+            f'  "{prefixes[0]} us history 20TK001EUS"\n'
         )
     else:
         ret_str = ''
