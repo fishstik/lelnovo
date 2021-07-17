@@ -175,7 +175,7 @@ def get_specs(part_num, db, specs=[]):
                     return info, ret_specs
     return None, None
 
-# takes (info, specs) return value from get_specs
+# takes (info, specs) return value from get_specs()
 def format_specs(db, info, specs):
     contents = ''
     contents += f'{info["part number"]} ([link]({db["metadata"]["base url"]}/p/{info["part number"]}))'
@@ -377,7 +377,7 @@ def cleanup_gpu(gpu, level=0):
         gpu = re.sub('[RG]TX\s?', '' , gpu)
     return gpu
 
-# returns ([(dt, price) ...], part_dict)
+# returns ([(dt:datetime, price:str, unavailable:bool) ...], part:dict)
 def get_history(pn, dbs):
     data = []
     part = None
@@ -392,22 +392,30 @@ def get_history(pn, dbs):
                 for p in parts:
                     if found: break
                     if pn == p['part number']:
-                        #print(dt.strftime('%c'), pn, p['num_specs']['price'][0])
-                        data.append((dt, p['num_specs']['price'][0]))
+                        if p['status'].lower() == 'unavailable':
+                            data.append((dt, p['num_specs']['price'][0], True))
+                        else:
+                            data.append((dt, p['num_specs']['price'][0], False))
                         part = p
                         found = True
-        if not found: data.append((dt, -100))
+        if not found: data.append((dt, -100, False))
 
     return data, part
 
+# takes (data, part) return value from get_history()
 # returns binary stream of plot image
 def plot_history(data, part):
+    unav_alpha = 0.5
+
     if part:
         curr = part['num_specs']['price'][1]
 
         x = np.array([d[0] for d in data])
         y = np.array([d[1] for d in data])
+        a = np.array([unav_alpha if d[2] else 1.0 for d in data])
         y_masked = np.ma.masked_where(y <= 0, y)
+        y_masked_unav = np.ma.masked_where(a == 1.0, y_masked)
+        y_masked_av = np.ma.masked_where(a < 1.0, y_masked)
 
         plt.rcParams['font.size'] = 12
         fig = plt.figure(figsize=(8,5))
@@ -426,13 +434,13 @@ def plot_history(data, part):
 
         plt.text(x=x[0], y=y[0]-ylim/5/3, s=f'{curr}{round(y[0])}', **{'fontweight': 'bold'})
         for i in range(1, len(y)):
-            #print(y[i], y[i-1], abs(y[i]/y[i-1]-1))
             if y[i] != -100 and abs(y[i]/y[i-1]-1) > 0.05:
                 plt.text(x=x[i], y=y[i]-ylim/5/3, s=f'{curr}{round(y[i])}', **{'fontweight': 'bold'})
 
         plt.title(part['name'])
-        plt.scatter(x, y)
-        plt.plot(x, y_masked)
+        plt.scatter(x, y, alpha=a)
+        plt.plot(x, y_masked_av)
+        plt.plot(x, y_masked_unav, 'C0--', alpha=unav_alpha)
         plt.grid(axis='x')
 
         bytes = io.BytesIO()
