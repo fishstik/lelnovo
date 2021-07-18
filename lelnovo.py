@@ -432,9 +432,8 @@ def plot_history(data, part):
         ax.set_yticks(np.arange(0, ylim+1, ylim/5))
         ax.yaxis.set_major_formatter(curr+'{x:1.0f}')
 
-        plt.text(x=x[0], y=y[0]-ylim/5/3, s=f'{curr}{round(y[0])}', **{'fontweight': 'bold'})
-        for i in range(1, len(y)):
-            if y[i] != -100 and abs(y[i]/y[i-1]-1) > 0.05:
+        for i in range(len(y)):
+            if y[i] != -100 and (i == 0 or abs(y[i-1]/y[i]-1) > 0.05):
                 plt.text(x=x[i], y=y[i]-ylim/5/3, s=f'{curr}{round(y[i])}', **{'fontweight': 'bold', 'alpha': a[i]})
 
         plt.title(part['name'])
