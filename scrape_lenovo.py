@@ -6,7 +6,7 @@ import json
 import math
 import time
 import multiprocessing
-import os
+import os, shutil 
 from bs4 import BeautifulSoup
 from itertools import repeat
 from collections import namedtuple
@@ -172,9 +172,10 @@ def get_api_specs(session, pn):
     all_specs = []
     for feature_types_d in d['classificationData']:
         feature_type = feature_types_d['name']
-        for feature_d in feature_types_d['featureDataDTO']:
-            feature_val = feature_d['featureValues'][0]['value'].encode('ascii', 'ignore').decode('ascii') # clean up unicode
-            all_specs.append((feature_d['name'], feature_val, feature_type))
+        if 'featureDataDTO' in feature_types_d:
+            for feature_d in feature_types_d['featureDataDTO']:
+                feature_val = feature_d['featureValues'][0]['value'].encode('ascii', 'ignore').decode('ascii') # clean up unicode
+                all_specs.append((feature_d['name'], feature_val, feature_type))
 
     # merge/clean up specs
     for spec in all_specs:
@@ -515,7 +516,7 @@ brands.extend([
     'thinkpadyoga-2',
     'thinkpad11e',
 ] if b in brands]
-#brands = ['yoga-2-in-1-series', 'yoga-slim-series', 'ideapad-s-series', 'IdeaPad-300', 'legion-7-series', 'ideapad-gaming-laptops']
+#brands = ['IdeaPad-300']
 print(f'Got {len(brands)} brands')
 
 print(f'Scraping \'{args.region}\'...')
@@ -600,8 +601,8 @@ if os.path.exists(f'{DB_DIR}/{DB_FILENAME}'):
     # backup old json file
     if not os.path.exists(f'{DB_DIR}/backup'): os.makedirs(f'{DB_DIR}/backup')
     new_filename = f'db_{args.region_short}_{datetime.fromtimestamp(db_old["metadata"]["timestamp"]).strftime("%m%d")}.json'
-    os.rename(f'{DB_DIR}/{DB_FILENAME}', f'{DB_DIR}/backup/{new_filename}')
-    print(f'Backed up \'{DB_DIR}/{DB_FILENAME}\' to \'{DB_DIR}/{new_filename}\'')
+    shutil.copyfile(f'{DB_DIR}/{DB_FILENAME}', f'{DB_DIR}/backup/{new_filename}')
+    print(f'Backed up \'{DB_DIR}/{DB_FILENAME}\' to \'{DB_DIR}/backup/{new_filename}\'')
 
 for k, v in db.items():
     if k in ['data', 'brands', 'changes']:
