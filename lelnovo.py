@@ -422,7 +422,7 @@ def plot_history(data, part):
         ax = plt.axes()
 
         locator = mdates.AutoDateLocator()
-        locator.intervald[DAILY] = [2]
+        locator.intervald[DAILY] = [round((x[-1]-x[0]).days/15)]
         formatter = mdates.ConciseDateFormatter(locator)
         ax.xaxis.set_major_locator(locator)
         ax.xaxis.set_major_formatter(formatter)
