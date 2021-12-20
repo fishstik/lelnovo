@@ -433,7 +433,11 @@ def plot_history(data, part):
         ax.yaxis.set_major_formatter(curr+'{x:1.0f}')
 
         for i in range(len(y)):
-            if y[i] != -100 and (i == 0 or abs(y[i-1]/y[i]-1) > 0.05):
+            if (y[i] != -100
+                and (i == 0
+                    or all([abs(y[i-n]-y[i]) > ylim/20 for n in range(1, 10)])
+                )
+            ):
                 plt.text(x=x[i], y=y[i]-ylim/5/3, s=f'{curr}{round(y[i])}', **{'fontweight': 'bold', 'alpha': a[i]})
 
         plt.title(part['name'])
