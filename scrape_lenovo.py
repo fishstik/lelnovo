@@ -237,6 +237,34 @@ def get_api_specs(session, pn):
     #pprint([f'{k:20} {v}' for k, v in num_specs.items()], width=187)
     return specs, num_specs
 
+def get_brands(s, region):
+    # collect brands from seriesListPage api call
+    series = [
+        'THINKPAD' if region in ['gb/en', 'gb/en/gbepp'] else 'thinkpad',
+        'IdeaPad',
+        'legion-laptops',
+    ]
+    brands = []
+    for ser in series:
+        r = try_request(s, f'{BASE_URL}/c/{ser}/seriesListPage/json')
+        if r:
+            d = json.loads(r.text)
+            for brand_d in d[ser]:
+                brands.append(brand_d['code'])
+    brands.extend([
+        'thinkbook-series',
+        'yoga-2-in-1-series',
+        'yoga-slim-series',
+    ])
+    [brands.remove(b) for b in [
+        'thinkpadyoga',
+        'thinkpadyoga-2',
+        'thinkpad11e',
+    ] if b in brands]
+    #brands = ['IdeaPad-300']
+
+    return brands
+
 def process_brand(s, brand, print_part_progress=False, print_live_progress=False):
     # returns dict with part numbers as key
     prods = {}
@@ -345,6 +373,7 @@ def get_changes(db_new, db_old):
     changed = {}
     # check for additions
     for brand, prods in db_new['data'].items():
+        brand = brand.lower()
         for prodn, parts in prods.items():
             # keep copy of parts, remove if found in old db_new
             new_parts = list(parts)
@@ -364,6 +393,7 @@ def get_changes(db_new, db_old):
                 added[brand][prodn][1].extend(new_parts)
     # check for removals
     for brand, prods in db_old['data'].items():
+        brand = brand.lower()
         if brand in db_new['data']:
             for prodn, parts in prods.items():
                 # keep copy of parts, remove if found in old db
@@ -389,6 +419,7 @@ def get_changes(db_new, db_old):
                 removed[brand][prodn][1].extend(parts)
     # check for changes
     for brand, prods in db_new['data'].items():
+        brand = brand.lower()
         for prodn, parts in prods.items():
             if brand in db_old['data'] and prodn in [p[0] for p in db_old['brands'][brand]]:
                 for part in parts:
@@ -447,18 +478,6 @@ NumSpec = namedtuple('NumSpec', ['value', 'unit'])
 s = requests.Session()
 s.headers.update({'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36'})
 
-#db['data'] = {
-#    'thinkpadx1': {
-#        '22TP2X1X1C9': [
-#            {
-#                'spec': val,
-#                'num_specs': {
-#                    'num_spec': (num, 'unit'),
-#                }, ...
-#            }, ...
-#        ], ...
-#    }, ...
-#}
 db = {
     'metadata': {
         'region':       args.region,
@@ -479,6 +498,18 @@ db = {
     #    ], ...
     #}
     'brands': {},
+    #{
+    #    'thinkpadx1': {
+    #        '22TP2X1X1C9': [
+    #            {
+    #                'spec': val,
+    #                'num_specs': {
+    #                    'num_spec': (num, 'unit'),
+    #                }, ...
+    #            }, ...
+    #        ], ...
+    #    }, ...
+    #}
     'data': {}
 }
 
@@ -503,31 +534,8 @@ if args.region in ['us/en/ticketsatwork', 'gb/en/gbepp']:
         data=payload,
     )
 
-# collect brands from seriesListPage api call
 print(f'Collecting brands...')
-series = [
-    'THINKPAD' if args.region in ['gb/en', 'gb/en/gbepp'] else 'thinkpad',
-    'IdeaPad',
-    'legion-laptops',
-]
-brands = []
-for ser in series:
-    r = try_request(s, f'{BASE_URL}/c/{ser}/seriesListPage/json')
-    if r:
-        d = json.loads(r.text)
-        for brand_d in d[ser]:
-            brands.append(brand_d['code'])
-brands.extend([
-    'thinkbook-series',
-    'yoga-2-in-1-series',
-    'yoga-slim-series',
-])
-[brands.remove(b) for b in [
-    'thinkpadyoga',
-    'thinkpadyoga-2',
-    'thinkpad11e',
-] if b in brands]
-#brands = ['IdeaPad-300']
+brands = get_brands(s, args.region)
 print(f'Got {len(brands)} brands')
 
 print(f'Scraping \'{args.region}\'...')
