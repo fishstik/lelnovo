@@ -14,19 +14,28 @@ from datetime import datetime
 from html2text import html2text
 from pprint import pprint, pformat
 
-def try_request(s, url, wait_s=1):
-    while True:
+def try_request(s, url, wait_s=1, tries=3):
+    global FORBIDDEN_COUNT
+
+    while tries > 0:
         r = s.get(url)
         if r.status_code == 200:
             return r
-        elif r.status_code == 404:
-            return None
         else:
-            #print(f'request {url} failed with {r.status_code}. Waiting {wait_s}s ...')
-            #time.sleep(wait_s)
-            #wait_s *= 2
-            print(f'request {url} failed with {r.status_code} Exiting...')
-            sys.exit() #FIXME: terminate mp parent if child is exiting
+            print(f'request {url} failed with code {r.status_code}')
+            if r.status_code == 404:
+                return None
+            elif r.status_code == 403:
+                FORBIDDEN_COUNT += 1
+                return None
+            else:
+                tries -= 1
+                print(f'Waiting {wait_s}s and trying again ({tries} left) ...')
+                time.sleep(wait_s)
+                wait_s *= 2
+                #print(f'request {url} failed with {r.status_code} Exiting...')
+                #sys.exit() #FIXME: terminate mp parent if child is exiting
+    return None
 
 def get_info(prod, button):
     info = {}
@@ -431,6 +440,7 @@ args = parser.parse_args()
 BASE_URL = f'https://www.lenovo.com/{args.region}'
 DB_DIR = f'./dbs'
 DB_FILENAME = f'db_{args.region_short}.json'
+FORBIDDEN_COUNT = 0
 
 NumSpec = namedtuple('NumSpec', ['value', 'unit'])
 
@@ -503,9 +513,10 @@ series = [
 brands = []
 for ser in series:
     r = try_request(s, f'{BASE_URL}/c/{ser}/seriesListPage/json')
-    d = json.loads(r.text)
-    for brand_d in d[ser]:
-        brands.append(brand_d['code'])
+    if r:
+        d = json.loads(r.text)
+        for brand_d in d[ser]:
+            brands.append(brand_d['code'])
 brands.extend([
     'thinkbook-series',
     'yoga-2-in-1-series',
@@ -598,12 +609,8 @@ if os.path.exists(f'{DB_DIR}/{DB_FILENAME}'):
         db_old = json.loads(js)
         print(f'Found existing \'{DB_DIR}/{DB_FILENAME}\'')
     db['changes'] = get_changes(db, db_old)
-    # backup old json file
-    if not os.path.exists(f'{DB_DIR}/backup'): os.makedirs(f'{DB_DIR}/backup')
-    new_filename = f'db_{args.region_short}_{datetime.fromtimestamp(db_old["metadata"]["timestamp"]).strftime("%m%d")}.json'
-    shutil.copyfile(f'{DB_DIR}/{DB_FILENAME}', f'{DB_DIR}/backup/{new_filename}')
-    print(f'Backed up \'{DB_DIR}/{DB_FILENAME}\' to \'{DB_DIR}/backup/{new_filename}\'')
 
+# print db summary
 for k, v in db.items():
     if k in ['data', 'brands', 'changes']:
         print(f'{k} [{len(v)}]')
@@ -622,7 +629,22 @@ duration_s = time.time()-start
 duration_str = f'{int(duration_s/60)}m {int(duration_s%60)}s'
 print(f'Scraped in {duration_str}')
 
-if not os.path.exists(DB_DIR): os.makedirs(DB_DIR)
-with open(f'{DB_DIR}/{DB_FILENAME}', 'w') as f:
-    json.dump(db, f)
-    print(f'Wrote to \'{DB_DIR}/{DB_FILENAME}\' on {time.strftime("%c")}')
+if FORBIDDEN_COUNT > 0:
+    print(f'WARNING: Got {FORBIDDEN_COUNT} 403 Forbidden errors while scraping.')
+    filename = f'db_{args.region_short}_{datetime.fromtimestamp(db["metadata"]["timestamp"]).strftime("%m%d")}_{FORBIDDEN_COUNT}FORBIDDENS.json'
+    with open(filename, 'w') as f:
+        json.dump(db, f)
+        print(f'Wrote temp-banned db to \'./{filename}\' on {time.strftime("%c")}')
+else:
+    if not os.path.exists(DB_DIR): os.makedirs(DB_DIR)
+    # backup old json file
+    if 'changes' in db:
+        if not os.path.exists(f'{DB_DIR}/backup'): os.makedirs(f'{DB_DIR}/backup')
+        new_filename = f'db_{args.region_short}_{datetime.fromtimestamp(db_old["metadata"]["timestamp"]).strftime("%m%d")}.json'
+        shutil.copyfile(f'{DB_DIR}/{DB_FILENAME}', f'{DB_DIR}/backup/{new_filename}')
+        print(f'Backed up \'{DB_DIR}/{DB_FILENAME}\' to \'{DB_DIR}/backup/{new_filename}\'')
+
+    # write new json file
+    with open(f'{DB_DIR}/{DB_FILENAME}', 'w') as f:
+        json.dump(db, f)
+        print(f'Wrote to \'{DB_DIR}/{DB_FILENAME}\' on {time.strftime("%c")}')
