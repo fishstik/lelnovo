@@ -316,16 +316,16 @@ def part_listentry(p, show_pn=True, base_url=None, show_price=True, show_name=Fa
         else:       pn = ''
     price = f'{p["num_specs"]["price"][1]}{p["num_specs"]["price"][0]:.2f}'
     #res = f'{p["num_specs"]["display res horizontal"][0]}x{p["num_specs"]["display res vertical"][0]}' if "display res vertical" in p["num_specs"] else ""
-    res = f' {p["num_specs"]["display res vertical"][0]}p' if "display res vertical" in p["num_specs"] else ""
+    res = f' {p["num_specs"]["display res vertical"][0]}p ' if "display res vertical" in p["num_specs"] else ""
     proc = f'{cleanup_cpu(p["processor"], 2)}'
-    if 'graphics' in p and 'discrete' in p['graphics'].lower(): proc += f', {cleanup_gpu(p["graphics"], 2)}'
+    if 'graphics' in p and 'discrete' in p['graphics'].lower() or 'nvidia' in p['graphics'].lower(): proc += f', {cleanup_gpu(p["graphics"], 2)}'
     ret = (
         f'{pn}'
         f'{" "+fmt+price+" " if show_price else " "+fmt}'
         f'{str(int(p["num_specs"]["memory"][0]))+p["num_specs"]["memory"][1] if "memory" in p["num_specs"] else ""}'
         f'{","+str(int(p["num_specs"]["storage"][0]))+p["num_specs"]["storage"][1] if "storage" in p["num_specs"] else ""}'
         f'{res}'
-        f' {proc}{fmt}'
+        f'{proc}{fmt}'
     )
     if show_name: ret += f' {p["name"]}'
     return ret
