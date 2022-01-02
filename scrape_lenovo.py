@@ -418,7 +418,7 @@ def scrape_openapi(s, region, brand_merge):
                     }
                     if 'leadTime' in p: info['shipping'] = f"Ships in {p['leadTime']} days"
                     if 'couponCode' in p: info['coupon'] = p['couponCode']
-                    info['image url'] = p['media']['heroImage']['imageAddress'][2:]
+                    #info['image url'] = p['media']['heroImage']['imageAddress'][2:]
 
                     # classification specs
                     if 'classification' in p:
