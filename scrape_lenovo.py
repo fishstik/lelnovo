@@ -1,12 +1,13 @@
 import argparse
 import requests
+import urllib
 import sys
 import re
 import json
 import math
 import time
 import multiprocessing
-import os, shutil 
+import os, shutil
 from bs4 import BeautifulSoup
 from itertools import repeat
 from collections import namedtuple
@@ -110,6 +111,7 @@ def get_api_specs(session, pn):
         'display type':               'display',
         'feature backlit keyboard':   'keyboard',
         'feature convertible':        'convertible',
+        'fingerprint reader':         'fp reader',
         'feature fingerprint reader': 'fp reader',
         'feature for gaming':         'gaming',
         'feature optical drive':      'optical drive',
@@ -361,6 +363,149 @@ def process_brand(s, brand, print_part_progress=False, print_live_progress=False
 
     return prods, keys
 
+def scrape_openapi(s, region, brand_merge):
+    data = {}
+    # keep track of and return all keys encountered in this brand
+    keys = {
+        'info': set(),
+        'num_specs': set(),
+    }
+    total = 0
+
+    spec_merge = {
+        'fingerprint reader':  'fp reader',
+        'nb_wwan':             'wwan',
+        'second storage':      'storage',
+        'wlan':                'wireless',
+        'world facing camera': 'second camera',
+    }
+    spec_ignore = [
+        'pointing device',
+    ]
+
+    pages = float('inf')
+    page = 1
+    while page <= pages:
+        payload = json.dumps({
+            "classificationGroupIds":"800001",
+            "pageFilterId":"6999c7d0-bccf-4160-91d2-90a8288f8365",
+            "page":str(page),
+            "pageSize":"40",
+        })
+        r = s.post(f'https://openapi.lenovo.com/{region}/ofp/search/dlp/product/query', data=payload)
+        if r:
+            d = json.loads(r.text)
+            if d and 'data' in d and d['data'] and 'data' in d['data']:
+                for p in d['data']['data']:
+                    # locate prod by capitalization and length, assume brand always precedes it in categoryPath
+                    prod = ''
+                    for i in range(0, len(p['categoryPath'])-1):
+                        step = p['categoryPath'][i+1]
+                        m = re.match(r'[A-Z0-9]+', step)
+                        if m and (prod == '' or len(m.group(0)) < len(prod)):
+                            prod = m.group(0)
+                            break
+
+                    brand = p['categoryPath'][i]
+                    name = p['summary']
+                    if brand in brand_merge: brand = brand_merge[brand]
+                    if brand not in data: data[brand] = {}
+                    if prod not in data[brand]: data[brand][prod] = []
+                    info = {
+                        'part number': p['productCode'],
+                        'name': name,
+                        'status': p['marketingStatus'],
+                    }
+                    if 'leadTime' in p: info['shipping'] = f"Ships in {p['leadTime']} days"
+                    if 'couponCode' in p: info['coupon'] = p['couponCode']
+                    info['image url'] = p['media']['heroImage']['imageAddress'][2:]
+
+                    # classification specs
+                    if 'classification' in p:
+                        for spec in p['classification']:
+                            spec_name = spec['a'].lower()
+                            spec_value = spec['b'].strip()
+
+                            # clean up spec value
+                            spec_value = re.sub(r'<br>|<\/br>', ', ', spec_value)
+                            spec_value = re.sub(r'\\n', ' ', spec_value)
+                            spec_value = html2text(spec_value).strip()
+
+                            # merge specs
+                            if spec_name not in spec_ignore:
+                                if spec_name in spec_merge: spec_name = spec_merge[spec_name]
+                                if spec_name not in info: info[spec_name] = spec_value
+                                else:
+                                    for word in spec_value.split():
+                                        if word.lower() not in info[spec_name].lower():
+                                            info[spec_name] += f' {word}'
+
+                    # numeric specs
+                    info['num_specs'] = {
+                        'price': NumSpec(float(p['finalPrice']), p['currencySymbol']),
+                    }
+
+                    #print(f'{brand} | {prod} | {info["part number"]} | {name}')
+                    data[brand][prod].append(info)
+
+                    keys['info'].update(info.keys())
+                    keys['num_specs'].update(info['num_specs'].keys())
+
+                    total += 1
+
+                pages = int(d['data']['pageCount'])
+                print(f"Got {len(d['data']['data'])} parts from page {d['data']['page']}/{pages}")
+                if pages > 100:
+                    print(f'Error: openapi request returned {pages} pages (>100). Exiting...')
+                    sys.exit()
+        else:
+            print(f'Error: {r.status_code}')
+        page += 1
+
+    # merge keys
+    keys['info'] = list(keys['info'])
+    keys['info'].remove('num_specs')
+    keys['num_specs'] = list(keys['num_specs'])
+
+    return data, keys, total
+
+def get_prodnames_openapi(s, region, brand_merge):
+    brands = {}
+    pages = float('inf')
+    page = 1
+    while page <= pages:
+        params = {
+            'params': urllib.parse.quote('{\
+                "pageFilterId":"a7b024c8-a164-4c56-b65e-0c20fe323ada",\
+                "page":'+str(page)+',\
+                "pageSize":40\
+            }')
+        }
+        r = s.get(f'https://openapi.lenovo.com/{region}/ofp/search/dlp/product/query/get/_tsc', params=params)
+        if r:
+            d = json.loads(r.text)
+            if d and 'data' in d and d['data'] and 'data' in d['data']:
+                for p in d['data']['data']:
+                    brand = p['categoryPath'][-1]
+                    if brand in brand_merge: brand = brand_merge[brand]
+                    if brand not in brands: brands[brand] = []
+
+                    prodnum = p['productCode']
+
+                    prodname = p['summary'].replace('\u201d', '"')
+                    prodname = re.sub(r'(\|.*|laptop|2 in 1|2-in-1|mobile workstation|high performance|gaming|tablet|pc)', '', prodname, flags=re.I)
+                    prodname = prodname.strip()
+
+                    brands[brand].append((prodnum, prodname))
+
+                pages = int(d['data']['pageCount'])
+                print(f"Got {len(d['data']['data'])} product lines from page {d['data']['page']}/{pages}")
+        else:
+            print(f'Error: {r.status_code}')
+        page += 1
+
+    return brands
+
 #returns changes = {
 #    'timestamp_old' = ts,
 #    'added':   { 'brand': { 'prodn': ('prod', [part_d, ... ]), ... }, ... },
@@ -463,6 +608,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('region')
 parser.add_argument('region_short')
 parser.add_argument('mp_threads', type=int)
+parser.add_argument('-o', '--openapi', action='store_true')
 parser.add_argument('-pw', '--password')
 parser.add_argument('-p', '--print_progress', action='store_true')
 parser.add_argument('-l', '--print_live_progress', action='store_true')
@@ -476,7 +622,10 @@ FORBIDDEN_COUNT = 0
 NumSpec = namedtuple('NumSpec', ['value', 'unit'])
 
 s = requests.Session()
-s.headers.update({'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36'})
+s.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.82 Safari/537.36',
+    'referer': 'https://www.lenovo.com/',
+})
 
 db = {
     'metadata': {
@@ -534,79 +683,96 @@ if args.region in ['us/en/ticketsatwork', 'gb/en/gbepp']:
         data=payload,
     )
 
-print(f'Collecting brands...')
-brands = get_brands(s, args.region)
-print(f'Got {len(brands)} brands')
+# openapi scrape
+brand_merge = {
+    'thinkbook-series': 'thinkbook',
+}
+if args.openapi:
+    print(f'Scraping \'{args.region}\' (openapi)...')
+    data, keys, total = scrape_openapi(s, args.region, brand_merge)
+    db['data'] = data
+    db['keys'] = keys
+    db['metadata']['total'] = total
 
-print(f'Scraping \'{args.region}\'...')
-# return a list of tuple(data dicts, keys)
-results = []
-if args.mp_threads <= 1:
-    for brand in brands:
-        result, keys = process_brand(s, brand, args.print_progress, args.print_live_progress)
-        results.append((result, keys))
+    # retrieve product line names
+    print(f'Getting product line names (openapi)...')
+    db['brands'] = get_prodnames_openapi(s, args.region, brand_merge)
+
+# regular scrape
 else:
-    with multiprocessing.Pool(args.mp_threads) as p:
-        results = p.starmap(process_brand,
-            zip(
-                repeat(s),
-                brands,
-                repeat(args.print_progress),
-                repeat(False),
+    print(f'Collecting brands...')
+    brands = get_brands(s, args.region)
+    print(f'Got {len(brands)} brands')
+
+    print(f'Scraping \'{args.region}\'...')
+    # return a list of tuple(data dicts, keys)
+    results = []
+    if args.mp_threads <= 1:
+        for brand in brands:
+            result, keys = process_brand(s, brand, args.print_progress, args.print_live_progress)
+            results.append((result, keys))
+    else:
+        with multiprocessing.Pool(args.mp_threads) as p:
+            results = p.starmap(process_brand,
+                zip(
+                    repeat(s),
+                    brands,
+                    repeat(args.print_progress),
+                    repeat(False),
+                )
             )
-        )
-        p.terminate()
-        print('Pool terminated')
-        p.join()
+            p.terminate()
+            print('Pool terminated')
+            p.join()
 
-db['data'] = dict(zip(brands, [r[0] for r in results]))
+    db['data'] = dict(zip(brands, [r[0] for r in results]))
 
-# cleanup any empty brands/prodlines
-empty_brands = []
-empty_prodnums = {}
-for brand, prods in db['data'].items():
-    if prods == {'': []}:
-        empty_brands.append(brand)
-    # check for empty product lines
-    for prodnum, parts in prods.items():
-        if parts == []:
-            if brand not in empty_prodnums: empty_prodnums[brand] = []
-            empty_prodnums[brand].append(prodnum)
-for empty_brand in empty_brands:
-    print(f'\'{empty_brand}\' is empty. Deleting...')
-    del db['data'][empty_brand]
-for brand, prodnums in empty_prodnums.items():
-    for prodnum in prodnums:
-        print(f'\'{brand} - {prodnum}\' is empty. Deleting...')
-        del db['data'][brand][prodnum]
+    # cleanup any empty brands/prodlines
+    empty_brands = []
+    empty_prodnums = {}
+    for brand, prods in db['data'].items():
+        if prods == {'': []}:
+            empty_brands.append(brand)
+        # check for empty product lines
+        for prodnum, parts in prods.items():
+            if parts == []:
+                if brand not in empty_prodnums: empty_prodnums[brand] = []
+                empty_prodnums[brand].append(prodnum)
+    for empty_brand in empty_brands:
+        print(f'\'{empty_brand}\' is empty. Deleting...')
+        del db['data'][empty_brand]
+    for brand, prodnums in empty_prodnums.items():
+        for prodnum in prodnums:
+            print(f'\'{brand} - {prodnum}\' is empty. Deleting...')
+            del db['data'][brand][prodnum]
 
-# add product lines to brands
-print(f'Getting product line titles...')
-for brand, prods in db['data'].items():
-    db['brands'][brand] = []
-    for prod in prods.keys():
-        # retrieve product line name via api
-        r = try_request(s, f'{BASE_URL}/p/{prod}/specs/json')
-        if r:
-            d = json.loads(r.text)
-            db['brands'][brand].append((prod, d['name'].replace('\u201d', '"')))
-    if args.print_progress: print(brand)
+    # retrieve product line names
+    print(f'Getting product line names...')
+    for brand, prods in db['data'].items():
+        db['brands'][brand] = []
+        for prod in prods.keys():
+            # retrieve product line name via api
+            r = try_request(s, f'{BASE_URL}/p/{prod}/specs/json')
+            if r:
+                d = json.loads(r.text)
+                db['brands'][brand].append((prod, d['name'].replace('\u201d', '"')))
+        if args.print_progress: print(brand)
 
-# merge keys
-for r in results:
-    db['keys']['info'] = list(set(db['keys']['info'] + r[1]['info']))
-    #db['keys']['api_specs'] = list(set(db['keys']['api_specs'] + r[1]['api_specs']))
-    db['keys']['num_specs'] = list(set(db['keys']['num_specs'] + r[1]['num_specs']))
-# remove num_specs key from info
-db['keys']['info'].remove('num_specs')
+    # merge keys
+    for r in results:
+        db['keys']['info'] = list(set(db['keys']['info'] + r[1]['info']))
+        #db['keys']['api_specs'] = list(set(db['keys']['api_specs'] + r[1]['api_specs']))
+        db['keys']['num_specs'] = list(set(db['keys']['num_specs'] + r[1]['num_specs']))
+    # remove num_specs key from info
+    db['keys']['info'].remove('num_specs')
 
-# count and store total
-total = 0
-for r in results:
-    brand = r[0]
-    for prod, parts in brand.items():
-        total += len(parts)
-db['metadata']['total'] = total
+    # count and store total
+    total = 0
+    for r in results:
+        brand = r[0]
+        for prod, parts in brand.items():
+            total += len(parts)
+    db['metadata']['total'] = total
 
 db['metadata']['timestamp'] = time.time()
 
@@ -646,7 +812,7 @@ if FORBIDDEN_COUNT > 0:
 else:
     if not os.path.exists(DB_DIR): os.makedirs(DB_DIR)
     # backup old json file
-    if 'changes' in db:
+    if db['changes']:
         if not os.path.exists(f'{DB_DIR}/backup'): os.makedirs(f'{DB_DIR}/backup')
         new_filename = f'db_{args.region_short}_{datetime.fromtimestamp(db_old["metadata"]["timestamp"]).strftime("%m%d")}.json'
         shutil.copyfile(f'{DB_DIR}/{DB_FILENAME}', f'{DB_DIR}/backup/{new_filename}')
