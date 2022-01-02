@@ -428,6 +428,7 @@ def scrape_openapi(s, region, brand_merge):
 
                             # clean up spec value
                             spec_value = re.sub(r'<br>|<\/br>', ', ', spec_value)
+                            spec_value = re.sub(r'®|™', '', spec_value)
                             spec_value = re.sub(r'\\n', ' ', spec_value)
                             spec_value = html2text(spec_value).strip()
 
