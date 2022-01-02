@@ -598,8 +598,8 @@ def get_usage_str(prefixes):
         f'  "{prefix} us specs 20TK001EUS price, display, memory"\n'
         f'  "{prefix} us history 20TK001EUS"\n'
         f'  "{prefix} setregion us", then "{prefix} history 20TK001EUS"\n'
-        f'  "{prefix} psref 20TK001EUS"\n'
-        f'  "{prefix} psref 20TK001EUS processor, display, memory"\n'
+        f'  "{prefix} psref 20XW004AUS"\n'
+        f'  "{prefix} psref 20XW004AUS processor, display, memory"\n'
     )
 
 def get_command_descr(cmd, prefixes):
@@ -649,8 +649,8 @@ def get_command_descr(cmd, prefixes):
             f'if specs are given, filters result by the given comma-separated specs.\n'
             f'\n'
             f'examples:\n'
-            f'  "{prefixes[0]} us psref 20TK001EUS"\n'
-            f'  "{prefixes[0]} us psref 20TK001EUS price, display, memory"\n'
+            f'  "{prefixes[0]} psref 20XW004AUS"\n'
+            f'  "{prefixes[0]} psref 20XW004AUS processor, display, memory"\n'
         )
     elif cmd == 'reg_status':
         ret_str = COMMAND_BRIEFS['reg_status'] # inaccessible
