@@ -245,7 +245,7 @@ def get_specs_psref(s, pn, specs=[]):
                         tds = row.find_all('td')
                         if len(tds) >= 2:
                             spec_name = tds[0].get_text().lower()
-                            spec_val = tds[1].get_text()
+                            spec_val = tds[1].get_text(separator=', ')
                             if not specs:
                                 ret_specs[spec_name] = spec_val
                             else:

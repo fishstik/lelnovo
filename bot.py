@@ -52,6 +52,7 @@ CMD_ALIASES = {
     'lr': 'listregions',
     'st': 'status',
     'sr': 'setregion',
+    'ps': 'psref',
 }
 REGCMD_ALIASES = {
     'st': 'status',
