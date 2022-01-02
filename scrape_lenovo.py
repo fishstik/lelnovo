@@ -814,7 +814,7 @@ else:
     # backup old json file
     if db['changes']:
         if not os.path.exists(f'{DB_DIR}/backup'): os.makedirs(f'{DB_DIR}/backup')
-        new_filename = f'db_{args.region_short}_{datetime.fromtimestamp(db_old["metadata"]["timestamp"]).strftime("%m%d")}.json'
+        new_filename = f'db_{args.region_short}_{datetime.fromtimestamp(db_old["metadata"]["timestamp"]).strftime("%y%m%d")}.json'
         shutil.copyfile(f'{DB_DIR}/{DB_FILENAME}', f'{DB_DIR}/backup/{new_filename}')
         print(f'Backed up \'{DB_DIR}/{DB_FILENAME}\' to \'{DB_DIR}/backup/{new_filename}\'')
 
