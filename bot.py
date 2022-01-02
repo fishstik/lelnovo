@@ -6,6 +6,7 @@ import json, time
 import os
 import atexit
 import sys
+import requests
 from datetime import datetime
 
 from watchdog.observers import Observer
@@ -133,9 +134,7 @@ async def cmd_help(context, *args):
     await try_send(context, content=f'```\n{msg}```')
 
 @BOT.command(name='listregions',
-    aliases     = ['lr'],
-    brief       = lelnovo.COMMAND_BRIEFS['listregions'],
-    description = lelnovo.get_command_descr('listregions', BOT_PREFIXES),
+    aliases=['lr'],
 )
 async def cmd_listregions(context):
     embed = discord.Embed(
@@ -205,11 +204,51 @@ async def cmd_setregion(context, *args):
     )
     await try_send(context, embed=embed)
 
+@BOT.command(name='psref',
+    aliases=['ps'],
+)
+async def cmd_psref(context, *args):
+    params = ' '.join(args)
+    if params:
+        specs = []
+        words = re.split('\s+', params, 1)
+        pn = words[0]
+        # user-provided specs
+        if len(words) > 1: specs = [s.strip() for s in words[1].split(',')]
+
+        info, ret_specs = lelnovo.get_specs_psref(S, pn, specs)
+        # Found part
+        if info:
+            embed = discord.Embed(
+                title=f'PSREF specs for {info["name"]}',
+                description=lelnovo.format_specs_psref(info, ret_specs),
+                color=EMBED_COLOR,
+            )
+        else:
+            embed = discord.Embed(
+                title=f'PSREF specs for `{pn}` not found',
+                description=f'Check that the part number is valid. Note that part numbers from the store may not exist in PSREF.',
+                color=EMBED_COLOR,
+            )
+    else:
+        embed = discord.Embed(
+            title=f'PSREF specs',
+            description='```\n'+''.join(lelnovo.get_command_descr('psref', BOT_PREFIXES))+'```',
+            color=EMBED_COLOR,
+        )
+
+    await try_send(context, embed=embed)
+
 @BOT.event
 async def on_ready():
     global DBS
+    global S
+
     print('Logged in as {0}'.format(BOT.user.name))
     await BOT.change_presence(activity=discord.Game(f'{BOT_PREFIXES[0]} help'))
+
+    S = requests.Session()
+    S.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.82 Safari/537.36'})
 
     file_handler = FileHandler()
     observer = Observer()

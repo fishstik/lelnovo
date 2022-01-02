@@ -8,6 +8,7 @@ import math
 import textwrap
 import os
 from datetime import datetime,timezone,timedelta
+from bs4 import BeautifulSoup
 from pprint import pprint
 
 import io
@@ -208,6 +209,63 @@ def format_specs(db, info, specs):
                     line = f'{num_spec:>{num_spec_spacing}}  {val} {unit}'
                     num_spec_contents += f'{multiline(line, indent=num_spec_spacing+2)}\n'
                 contents += num_spec_contents
+    else: contents += f'`[no valid specs to list]`\n'
+
+    return contents
+
+def get_specs_psref(s, pn, specs=[]):
+    info = {}
+    ret_specs = {}
+
+    # replace spec aliases with real spec
+    for i in range(len(specs)):
+        if specs[i] in SPEC_ALIASES: specs[i] = SPEC_ALIASES[specs[i]]
+        elif specs[i] in NUM_SPEC_ALIASES: specs[i] = NUM_SPEC_ALIASES[specs[i]]
+
+    payload = {
+        't':             'PreSearchForPerformance',
+        'SearchContent': pn,
+        'SearchType':    'Model',
+    }
+    r = s.post(f'https://psref.lenovo.com/ajax/HomeHandler.ashx', data=payload)
+    if r:
+        d = json.loads(r.text)
+        if d:
+            info['part number'] = pn
+            info['name']        = d[0]['ProductName']
+            info['url']         = f"https://psref.lenovo.com{d[0]['ProductPageLink']}"
+
+    if info:
+        r = s.get(info['url'])
+        if r:
+            soup = BeautifulSoup(r.content, 'html.parser')
+            for table in soup.select('.SpecValueTable'):
+                for row in table.find_all('tr'):
+                    if not row.has_attr('class'):
+                        tds = row.find_all('td')
+                        if len(tds) >= 2:
+                            spec_name = tds[0].get_text().lower()
+                            spec_val = tds[1].get_text()
+                            if not specs:
+                                ret_specs[spec_name] = spec_val
+                            else:
+                                for spec in specs:
+                                    if spec in spec_name:
+                                        ret_specs[spec_name] = spec_val
+    return info, ret_specs
+
+# takes (info, specs) return value from get_specs()
+def format_specs_psref(info, specs):
+    contents = ''
+    contents += f'{info["part number"]} ([PSREF link]({info["url"]}))\n'
+
+    if specs:
+        num_specs = {}
+        for spec, value in specs.items():
+            spacing = max([len(k) for k in specs.keys()])
+            if spec == 'processor': value = cleanup_cpu(value)
+            line = f'{spec:>{spacing}}  {value}'
+            contents += f'{multiline(line, indent=spacing+2)}\n'
     else: contents += f'`[no valid specs to list]`\n'
 
     return contents
@@ -519,6 +577,7 @@ def get_usage_str(prefixes):
         f'  {"lr|listregions":14}    {COMMAND_BRIEFS["listregions"]}\n'
         f'  {"st|status"     :14}    {COMMAND_BRIEFS["status"]}\n'
         f'  {"sr|setregion"  :14}    {COMMAND_BRIEFS["setregion"]}\n'
+        f'  {"ps|psref"      :14}    {COMMAND_BRIEFS["psref"]}\n'
         f'\n'
         f'commands with region:\n'
         f'  {"st|status"     :14}    {COMMAND_BRIEFS["reg_status"]}\n'
@@ -539,6 +598,8 @@ def get_usage_str(prefixes):
         f'  "{prefix} us specs 20TK001EUS price, display, memory"\n'
         f'  "{prefix} us history 20TK001EUS"\n'
         f'  "{prefix} setregion us", then "{prefix} history 20TK001EUS"\n'
+        f'  "{prefix} psref 20TK001EUS"\n'
+        f'  "{prefix} psref 20TK001EUS processor, display, memory"\n'
     )
 
 def get_command_descr(cmd, prefixes):
@@ -578,6 +639,18 @@ def get_command_descr(cmd, prefixes):
             f'       {"|".join(prefixes)} [region] st\n'
             f'\n'
             f'{COMMAND_BRIEFS["reg_status"]}'
+        )
+    elif cmd == 'psref':
+        ret_str = (
+            f'usage: {"|".join(prefixes)} psref [prodnum] [spec[, spec, ...]]\n'
+            f'       {"|".join(prefixes)} ps    [prodnum] [spec[, spec, ...]]\n'
+            f'\n'
+            f'{COMMAND_BRIEFS["psref"]}\n',
+            f'if specs are given, filters result by the given comma-separated specs.\n'
+            f'\n'
+            f'examples:\n'
+            f'  "{prefixes[0]} us psref 20TK001EUS"\n'
+            f'  "{prefixes[0]} us psref 20TK001EUS price, display, memory"\n'
         )
     elif cmd == 'reg_status':
         ret_str = COMMAND_BRIEFS['reg_status'] # inaccessible
@@ -643,6 +716,7 @@ def get_command_descr(cmd, prefixes):
     return ret_str
 
 COMMAND_BRIEFS = {
+    'psref':         'list PSREF specs for a given product number',
     'setregion':     'set/view/clear user region for region commands',
     'listregions':   'list all available regions',
     'status':        'display status for all available databases',
