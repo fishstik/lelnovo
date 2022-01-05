@@ -512,9 +512,9 @@ def get_prodnames_openapi(s, region, brand_merge):
 
 #returns changes = {
 #    'timestamp_old' = ts,
-#    'added':   { 'brand': { 'prodn': ('prod', [part_d, ... ]), ... }, ... },
-#    'removed': { 'brand': { 'prodn': ('prod', [part_d, ... ]), ... }, ... },
-#    'changed': { 'brand': { 'prodn': ('prod', [(part_d, [ {'spec': str, 'is_num_spec': bool, 'before': str, 'after': str}, ... ], ... ), ... ]) }, ... }
+#    'added':   { 'brand': { 'prodn': ('prodname', [part_d, ... ]), ... }, ... },
+#    'removed': { 'brand': { 'prodn': ('prodname', [part_d, ... ]), ... }, ... },
+#    'changed': { 'brand': { 'prodn': ('prodname', [(part_d, [ {'spec': str, 'is_num_spec': bool, 'before': str, 'after': str}, ... ], ... ), ... ]) }, ... }
 #}
 def get_changes(db_new, db_old):
     added = {}
@@ -522,7 +522,6 @@ def get_changes(db_new, db_old):
     changed = {}
     # check for additions
     for brand, prods in db_new['data'].items():
-        brand = brand.lower()
         for prodn, parts in prods.items():
             # keep copy of parts, remove if found in old db_new
             new_parts = list(parts)
@@ -542,7 +541,6 @@ def get_changes(db_new, db_old):
                 added[brand][prodn][1].extend(new_parts)
     # check for removals
     for brand, prods in db_old['data'].items():
-        brand = brand.lower()
         if brand in db_new['data']:
             for prodn, parts in prods.items():
                 # keep copy of parts, remove if found in old db
@@ -568,7 +566,6 @@ def get_changes(db_new, db_old):
                 removed[brand][prodn][1].extend(parts)
     # check for changes
     for brand, prods in db_new['data'].items():
-        brand = brand.lower()
         for prodn, parts in prods.items():
             if brand in db_old['data'] and prodn in [p[0] for p in db_old['brands'][brand]]:
                 for part in parts:
