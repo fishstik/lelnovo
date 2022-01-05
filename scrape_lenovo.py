@@ -411,48 +411,51 @@ def scrape_openapi(s, region, brand_merge):
                     if brand in brand_merge: brand = brand_merge[brand]
                     if brand not in data: data[brand] = {}
                     if prod not in data[brand]: data[brand][prod] = []
-                    info = {
-                        'part number': p['productCode'],
-                        'name': name,
-                        'status': p['marketingStatus'],
-                    }
-                    if 'leadTime' in p: info['shipping'] = f"Ships in {p['leadTime']} days"
-                    if 'couponCode' in p: info['coupon'] = p['couponCode']
-                    #info['image url'] = p['media']['heroImage']['imageAddress'][2:]
+                    if p['productCode'] in [p['part number'] for p in data[brand][prod]]:
+                        print(f'Skipping duplicate \'{p["productCode"]}\'')
+                    else:
+                        info = {
+                            'part number': p['productCode'],
+                            'name': name,
+                            'status': p['marketingStatus'],
+                        }
+                        if 'leadTime' in p: info['shipping'] = f"Ships in {p['leadTime']} days"
+                        if 'couponCode' in p: info['coupon'] = p['couponCode']
+                        #info['image url'] = p['media']['heroImage']['imageAddress'][2:]
 
-                    # classification specs
-                    if 'classification' in p:
-                        for spec in p['classification']:
-                            spec_name = spec['a'].lower()
-                            spec_value = spec['b'].strip()
+                        # classification specs
+                        if 'classification' in p:
+                            for spec in p['classification']:
+                                spec_name = spec['a'].lower()
+                                spec_value = spec['b'].strip()
 
-                            # clean up spec value
-                            spec_value = re.sub(r'<br>|<\/br>', ', ', spec_value)
-                            spec_value = re.sub(r'®|™', '', spec_value)
-                            spec_value = re.sub(r'\\n', ' ', spec_value)
-                            spec_value = html2text(spec_value).strip()
+                                # clean up spec value
+                                spec_value = re.sub(r'<br>|<\/br>', ', ', spec_value)
+                                spec_value = re.sub(r'®|™', '', spec_value)
+                                spec_value = re.sub(r'\\n', ' ', spec_value)
+                                spec_value = html2text(spec_value).strip()
 
-                            # merge specs
-                            if spec_name not in spec_ignore:
-                                if spec_name in spec_merge: spec_name = spec_merge[spec_name]
-                                if spec_name not in info: info[spec_name] = spec_value
-                                else:
-                                    for word in spec_value.split():
-                                        if word.lower() not in info[spec_name].lower():
-                                            info[spec_name] += f' {word}'
+                                # merge specs
+                                if spec_name not in spec_ignore:
+                                    if spec_name in spec_merge: spec_name = spec_merge[spec_name]
+                                    if spec_name not in info: info[spec_name] = spec_value
+                                    else:
+                                        for word in spec_value.split():
+                                            if word.lower() not in info[spec_name].lower():
+                                                info[spec_name] += f' {word}'
 
-                    # numeric specs
-                    info['num_specs'] = {
-                        'price': NumSpec(float(p['finalPrice']), p['currencySymbol']),
-                    }
+                        # numeric specs
+                        info['num_specs'] = {
+                            'price': NumSpec(float(p['finalPrice']), p['currencySymbol']),
+                        }
 
-                    #print(f'{brand} | {prod} | {info["part number"]} | {name}')
-                    data[brand][prod].append(info)
+                        #print(f'{brand} | {prod} | {info["part number"]} | {name}')
+                        data[brand][prod].append(info)
 
-                    keys['info'].update(info.keys())
-                    keys['num_specs'].update(info['num_specs'].keys())
+                        keys['info'].update(info.keys())
+                        keys['num_specs'].update(info['num_specs'].keys())
 
-                    total += 1
+                        total += 1
 
                 pages = int(d['data']['pageCount'])
                 print(f"Got {len(d['data']['data'])} parts from page {d['data']['page']}/{pages}")
