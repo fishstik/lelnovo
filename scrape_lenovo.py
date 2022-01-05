@@ -608,221 +608,222 @@ def get_changes(db_new, db_old):
     }
     return changes
 
-parser = argparse.ArgumentParser()
-parser.add_argument('region')
-parser.add_argument('region_short')
-parser.add_argument('mp_threads', type=int)
-parser.add_argument('-o', '--openapi', action='store_true')
-parser.add_argument('-pw', '--password')
-parser.add_argument('-p', '--print_progress', action='store_true')
-parser.add_argument('-l', '--print_live_progress', action='store_true')
-args = parser.parse_args()
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('region')
+    parser.add_argument('region_short')
+    parser.add_argument('mp_threads', type=int)
+    parser.add_argument('-o', '--openapi', action='store_true')
+    parser.add_argument('-pw', '--password')
+    parser.add_argument('-p', '--print_progress', action='store_true')
+    parser.add_argument('-l', '--print_live_progress', action='store_true')
+    args = parser.parse_args()
 
-BASE_URL = f'https://www.lenovo.com/{args.region}'
-DB_DIR = f'./dbs'
-DB_FILENAME = f'db_{args.region_short}.json'
-FORBIDDEN_COUNT = 0
+    BASE_URL = f'https://www.lenovo.com/{args.region}'
+    DB_DIR = f'./dbs'
+    DB_FILENAME = f'db_{args.region_short}.json'
+    FORBIDDEN_COUNT = 0
 
-NumSpec = namedtuple('NumSpec', ['value', 'unit'])
+    NumSpec = namedtuple('NumSpec', ['value', 'unit'])
 
-s = requests.Session()
-s.headers.update({
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.82 Safari/537.36',
-    'referer': 'https://www.lenovo.com/',
-})
+    s = requests.Session()
+    s.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.82 Safari/537.36',
+        'referer': 'https://www.lenovo.com/',
+    })
 
-db = {
-    'metadata': {
-        'region':       args.region,
-        'short region': args.region_short,
-        'base url':     BASE_URL,
-    },
-    # track changes per scrape
-    'changes': {},
-    # keep track of all keys encountered across all brands
-    'keys': {
-        'info': [],
-        #'api_specs': [], # merged into 'info'
-        'num_specs': [],
-    },
-    #{
-    #    'brand': [
-    #        ('product line num', 'product line name'), ...
-    #    ], ...
-    #}
-    'brands': {},
-    #{
-    #    'thinkpadx1': {
-    #        '22TP2X1X1C9': [
-    #            {
-    #                'spec': val,
-    #                'num_specs': {
-    #                    'num_spec': (num, 'unit'),
-    #                }, ...
-    #            }, ...
-    #        ], ...
-    #    }, ...
-    #}
-    'data': {}
-}
-
-start = time.time()
-
-if args.region in ['us/en/ticketsatwork', 'gb/en/gbepp']:
-    print(f'Authenticating \'{args.region}\'...')
-    if not args.password:
-        print(f'\'{args.region}\' requires --password argument. Exiting...')
-        sys.exit()
-
-    db['metadata']['passcode'] = args.password
-    # authenticate with passcode-protected sites
-    payload = {
-        'gatekeeperType': 'PasscodeGatekeeper',
-        'passcode': args.password
-        #'CSRFToken': csrf,
+    db = {
+        'metadata': {
+            'region':       args.region,
+            'short region': args.region_short,
+            'base url':     BASE_URL,
+        },
+        # track changes per scrape
+        'changes': {},
+        # keep track of all keys encountered across all brands
+        'keys': {
+            'info': [],
+            #'api_specs': [], # merged into 'info'
+            'num_specs': [],
+        },
+        #{
+        #    'brand': [
+        #        ('product line num', 'product line name'), ...
+        #    ], ...
+        #}
+        'brands': {},
+        #{
+        #    'thinkpadx1': {
+        #        '22TP2X1X1C9': [
+        #            {
+        #                'spec': val,
+        #                'num_specs': {
+        #                    'num_spec': (num, 'unit'),
+        #                }, ...
+        #            }, ...
+        #        ], ...
+        #    }, ...
+        #}
+        'data': {}
     }
-    url = f"{BASE_URL}/gatekeeper/authGatekeeper"
-    r = s.post(
-        url,
-        data=payload,
-    )
 
-# openapi scrape
-brand_merge = {
-    'thinkbook-series': 'thinkbook',
-}
-if args.openapi:
-    print(f'Scraping \'{args.region}\' (openapi)...')
-    data, keys, total = scrape_openapi(s, args.region, brand_merge)
-    db['data'] = data
-    db['keys'] = keys
-    db['metadata']['total'] = total
+    start = time.time()
 
-    # retrieve product line names
-    print(f'Getting product line names (openapi)...')
-    db['brands'] = get_prodnames_openapi(s, args.region, brand_merge)
+    if args.region in ['us/en/ticketsatwork', 'gb/en/gbepp']:
+        print(f'Authenticating \'{args.region}\'...')
+        if not args.password:
+            print(f'\'{args.region}\' requires --password argument. Exiting...')
+            sys.exit()
 
-# regular scrape
-else:
-    print(f'Collecting brands...')
-    brands = get_brands(s, args.region)
-    print(f'Got {len(brands)} brands')
+        db['metadata']['passcode'] = args.password
+        # authenticate with passcode-protected sites
+        payload = {
+            'gatekeeperType': 'PasscodeGatekeeper',
+            'passcode': args.password
+            #'CSRFToken': csrf,
+        }
+        url = f"{BASE_URL}/gatekeeper/authGatekeeper"
+        r = s.post(
+            url,
+            data=payload,
+        )
 
-    print(f'Scraping \'{args.region}\'...')
-    # return a list of tuple(data dicts, keys)
-    results = []
-    if args.mp_threads <= 1:
-        for brand in brands:
-            result, keys = process_brand(s, brand, args.print_progress, args.print_live_progress)
-            results.append((result, keys))
+    # openapi scrape
+    brand_merge = {
+        'thinkbook-series': 'thinkbook',
+    }
+    if args.openapi:
+        print(f'Scraping \'{args.region}\' (openapi)...')
+        data, keys, total = scrape_openapi(s, args.region, brand_merge)
+        db['data'] = data
+        db['keys'] = keys
+        db['metadata']['total'] = total
+
+        # retrieve product line names
+        print(f'Getting product line names (openapi)...')
+        db['brands'] = get_prodnames_openapi(s, args.region, brand_merge)
+
+    # regular scrape
     else:
-        with multiprocessing.Pool(args.mp_threads) as p:
-            results = p.starmap(process_brand,
-                zip(
-                    repeat(s),
-                    brands,
-                    repeat(args.print_progress),
-                    repeat(False),
+        print(f'Collecting brands...')
+        brands = get_brands(s, args.region)
+        print(f'Got {len(brands)} brands')
+
+        print(f'Scraping \'{args.region}\'...')
+        # return a list of tuple(data dicts, keys)
+        results = []
+        if args.mp_threads <= 1:
+            for brand in brands:
+                result, keys = process_brand(s, brand, args.print_progress, args.print_live_progress)
+                results.append((result, keys))
+        else:
+            with multiprocessing.Pool(args.mp_threads) as p:
+                results = p.starmap(process_brand,
+                    zip(
+                        repeat(s),
+                        brands,
+                        repeat(args.print_progress),
+                        repeat(False),
+                    )
                 )
-            )
-            p.terminate()
-            print('Pool terminated')
-            p.join()
+                p.terminate()
+                print('Pool terminated')
+                p.join()
 
-    db['data'] = dict(zip(brands, [r[0] for r in results]))
+        db['data'] = dict(zip(brands, [r[0] for r in results]))
 
-    # cleanup any empty brands/prodlines
-    empty_brands = []
-    empty_prodnums = {}
-    for brand, prods in db['data'].items():
-        if prods == {'': []}:
-            empty_brands.append(brand)
-        # check for empty product lines
-        for prodnum, parts in prods.items():
-            if parts == []:
-                if brand not in empty_prodnums: empty_prodnums[brand] = []
-                empty_prodnums[brand].append(prodnum)
-    for empty_brand in empty_brands:
-        print(f'\'{empty_brand}\' is empty. Deleting...')
-        del db['data'][empty_brand]
-    for brand, prodnums in empty_prodnums.items():
-        for prodnum in prodnums:
-            print(f'\'{brand} - {prodnum}\' is empty. Deleting...')
-            del db['data'][brand][prodnum]
+        # cleanup any empty brands/prodlines
+        empty_brands = []
+        empty_prodnums = {}
+        for brand, prods in db['data'].items():
+            if prods == {'': []}:
+                empty_brands.append(brand)
+            # check for empty product lines
+            for prodnum, parts in prods.items():
+                if parts == []:
+                    if brand not in empty_prodnums: empty_prodnums[brand] = []
+                    empty_prodnums[brand].append(prodnum)
+        for empty_brand in empty_brands:
+            print(f'\'{empty_brand}\' is empty. Deleting...')
+            del db['data'][empty_brand]
+        for brand, prodnums in empty_prodnums.items():
+            for prodnum in prodnums:
+                print(f'\'{brand} - {prodnum}\' is empty. Deleting...')
+                del db['data'][brand][prodnum]
 
-    # retrieve product line names
-    print(f'Getting product line names...')
-    for brand, prods in db['data'].items():
-        db['brands'][brand] = []
-        for prod in prods.keys():
-            # retrieve product line name via api
-            r = try_request(s, f'{BASE_URL}/p/{prod}/specs/json')
-            if r:
-                d = json.loads(r.text)
-                db['brands'][brand].append((prod, d['name'].replace('\u201d', '"')))
-        if args.print_progress: print(brand)
+        # retrieve product line names
+        print(f'Getting product line names...')
+        for brand, prods in db['data'].items():
+            db['brands'][brand] = []
+            for prod in prods.keys():
+                # retrieve product line name via api
+                r = try_request(s, f'{BASE_URL}/p/{prod}/specs/json')
+                if r:
+                    d = json.loads(r.text)
+                    db['brands'][brand].append((prod, d['name'].replace('\u201d', '"')))
+            if args.print_progress: print(brand)
 
-    # merge keys
-    for r in results:
-        db['keys']['info'] = list(set(db['keys']['info'] + r[1]['info']))
-        #db['keys']['api_specs'] = list(set(db['keys']['api_specs'] + r[1]['api_specs']))
-        db['keys']['num_specs'] = list(set(db['keys']['num_specs'] + r[1]['num_specs']))
-    # remove num_specs key from info
-    db['keys']['info'].remove('num_specs')
+        # merge keys
+        for r in results:
+            db['keys']['info'] = list(set(db['keys']['info'] + r[1]['info']))
+            #db['keys']['api_specs'] = list(set(db['keys']['api_specs'] + r[1]['api_specs']))
+            db['keys']['num_specs'] = list(set(db['keys']['num_specs'] + r[1]['num_specs']))
+        # remove num_specs key from info
+        db['keys']['info'].remove('num_specs')
 
-    # count and store total
-    total = 0
-    for r in results:
-        brand = r[0]
-        for prod, parts in brand.items():
-            total += len(parts)
-    db['metadata']['total'] = total
+        # count and store total
+        total = 0
+        for r in results:
+            brand = r[0]
+            for prod, parts in brand.items():
+                total += len(parts)
+        db['metadata']['total'] = total
 
-db['metadata']['timestamp'] = time.time()
+    db['metadata']['timestamp'] = time.time()
 
-# retrieve and log changes
-if os.path.exists(f'{DB_DIR}/{DB_FILENAME}'):
-    with open(f'{DB_DIR}/{DB_FILENAME}', 'r') as f:
-        js = f.read()
-        db_old = json.loads(js)
-        print(f'Found existing \'{DB_DIR}/{DB_FILENAME}\'')
-    db['changes'] = get_changes(db, db_old)
+    # retrieve and log changes
+    if os.path.exists(f'{DB_DIR}/{DB_FILENAME}'):
+        with open(f'{DB_DIR}/{DB_FILENAME}', 'r') as f:
+            js = f.read()
+            db_old = json.loads(js)
+            print(f'Found existing \'{DB_DIR}/{DB_FILENAME}\'')
+        db['changes'] = get_changes(db, db_old)
 
-# print db summary
-for k, v in db.items():
-    if k in ['data', 'brands', 'changes']:
-        print(f'{k} [{len(v)}]')
+    # print db summary
+    for k, v in db.items():
+        if k in ['data', 'brands', 'changes']:
+            print(f'{k} [{len(v)}]')
+        else:
+            print(k)
+            for k1, v1 in v.items():
+                print(f'  {k1:13} {v1}')
+        #if k in ['data']:
+        #    print(k)
+        #    for k1, v1 in v.items():
+        #        print(f'  {k1:13} {pformat(v1)}')
+    print()
+
+    # print scrape duration
+    duration_s = time.time()-start
+    duration_str = f'{int(duration_s/60)}m {int(duration_s%60)}s'
+    print(f'Scraped in {duration_str}')
+
+    if FORBIDDEN_COUNT > 0:
+        print(f'WARNING: Got {FORBIDDEN_COUNT} 403 Forbidden errors while scraping.')
+        filename = f'db_{args.region_short}_{datetime.fromtimestamp(db["metadata"]["timestamp"]).strftime("%m%d")}_{FORBIDDEN_COUNT}FORBIDDENS.json'
+        with open(filename, 'w') as f:
+            json.dump(db, f)
+            print(f'Wrote temp-banned db to \'./{filename}\' on {time.strftime("%c")}')
     else:
-        print(k)
-        for k1, v1 in v.items():
-            print(f'  {k1:13} {v1}')
-    #if k in ['data']:
-    #    print(k)
-    #    for k1, v1 in v.items():
-    #        print(f'  {k1:13} {pformat(v1)}')
-print()
+        if not os.path.exists(DB_DIR): os.makedirs(DB_DIR)
+        # backup old json file
+        if db['changes']:
+            if not os.path.exists(f'{DB_DIR}/backup'): os.makedirs(f'{DB_DIR}/backup')
+            new_filename = f'db_{args.region_short}_{datetime.fromtimestamp(db_old["metadata"]["timestamp"]).strftime("%y%m%d")}.json'
+            shutil.copyfile(f'{DB_DIR}/{DB_FILENAME}', f'{DB_DIR}/backup/{new_filename}')
+            print(f'Backed up \'{DB_DIR}/{DB_FILENAME}\' to \'{DB_DIR}/backup/{new_filename}\'')
 
-# print scrape duration
-duration_s = time.time()-start
-duration_str = f'{int(duration_s/60)}m {int(duration_s%60)}s'
-print(f'Scraped in {duration_str}')
-
-if FORBIDDEN_COUNT > 0:
-    print(f'WARNING: Got {FORBIDDEN_COUNT} 403 Forbidden errors while scraping.')
-    filename = f'db_{args.region_short}_{datetime.fromtimestamp(db["metadata"]["timestamp"]).strftime("%m%d")}_{FORBIDDEN_COUNT}FORBIDDENS.json'
-    with open(filename, 'w') as f:
-        json.dump(db, f)
-        print(f'Wrote temp-banned db to \'./{filename}\' on {time.strftime("%c")}')
-else:
-    if not os.path.exists(DB_DIR): os.makedirs(DB_DIR)
-    # backup old json file
-    if db['changes']:
-        if not os.path.exists(f'{DB_DIR}/backup'): os.makedirs(f'{DB_DIR}/backup')
-        new_filename = f'db_{args.region_short}_{datetime.fromtimestamp(db_old["metadata"]["timestamp"]).strftime("%y%m%d")}.json'
-        shutil.copyfile(f'{DB_DIR}/{DB_FILENAME}', f'{DB_DIR}/backup/{new_filename}')
-        print(f'Backed up \'{DB_DIR}/{DB_FILENAME}\' to \'{DB_DIR}/backup/{new_filename}\'')
-
-    # write new json file
-    with open(f'{DB_DIR}/{DB_FILENAME}', 'w') as f:
-        json.dump(db, f)
-        print(f'Wrote to \'{DB_DIR}/{DB_FILENAME}\' on {time.strftime("%c")}')
+        # write new json file
+        with open(f'{DB_DIR}/{DB_FILENAME}', 'w') as f:
+            json.dump(db, f)
+            print(f'Wrote to \'{DB_DIR}/{DB_FILENAME}\' on {time.strftime("%c")}')
