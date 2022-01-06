@@ -413,6 +413,8 @@ def scrape_openapi(s, region, brand_merge):
                     if prod not in data[brand]: data[brand][prod] = []
                     if p['productCode'] in [p['part number'] for p in data[brand][prod]]:
                         print(f'Skipping duplicate \'{p["productCode"]}\'')
+                    elif 'classification' not in p or 'processor' not in [k.lower() for k in p['classification']]:
+                        print(f'Skipping \'{p["productCode"]}\' (no processor in specs)')
                     else:
                         info = {
                             'part number': p['productCode'],
@@ -424,25 +426,24 @@ def scrape_openapi(s, region, brand_merge):
                         #info['image url'] = p['media']['heroImage']['imageAddress'][2:]
 
                         # classification specs
-                        if 'classification' in p:
-                            for spec in p['classification']:
-                                spec_name = spec['a'].lower()
-                                spec_value = spec['b'].strip()
+                        for spec in p['classification']:
+                            spec_name = spec['a'].lower()
+                            spec_value = spec['b'].strip()
 
-                                # clean up spec value
-                                spec_value = re.sub(r'<br>|<\/br>', ', ', spec_value)
-                                spec_value = re.sub(r'®|™', '', spec_value)
-                                spec_value = re.sub(r'\\n', ' ', spec_value)
-                                spec_value = html2text(spec_value).strip()
+                            # clean up spec value
+                            spec_value = re.sub(r'<br>|<\/br>', ', ', spec_value)
+                            spec_value = re.sub(r'®|™', '', spec_value)
+                            spec_value = re.sub(r'\\n', ' ', spec_value)
+                            spec_value = html2text(spec_value).strip()
 
-                                # merge specs
-                                if spec_name not in spec_ignore:
-                                    if spec_name in spec_merge: spec_name = spec_merge[spec_name]
-                                    if spec_name not in info: info[spec_name] = spec_value
-                                    else:
-                                        for word in spec_value.split():
-                                            if word.lower() not in info[spec_name].lower():
-                                                info[spec_name] += f' {word}'
+                            # merge specs
+                            if spec_name not in spec_ignore:
+                                if spec_name in spec_merge: spec_name = spec_merge[spec_name]
+                                if spec_name not in info: info[spec_name] = spec_value
+                                else:
+                                    for word in spec_value.split():
+                                        if word.lower() not in info[spec_name].lower():
+                                            info[spec_name] += f' {word}'
 
                         # numeric specs
                         info['num_specs'] = {
