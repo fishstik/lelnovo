@@ -413,7 +413,7 @@ def scrape_openapi(s, region, brand_merge):
                     if prod not in data[brand]: data[brand][prod] = []
                     if p['productCode'] in [p['part number'] for p in data[brand][prod]]:
                         print(f'Skipping duplicate \'{p["productCode"]}\'')
-                    elif 'classification' not in p or 'processor' not in [k.lower() for k in p['classification']]:
+                    elif 'classification' not in p or 'processor' not in [k['a'].lower() for k in p['classification']]:
                         print(f'Skipping \'{p["productCode"]}\' (no processor in specs)')
                     else:
                         info = {
