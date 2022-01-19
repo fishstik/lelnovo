@@ -534,11 +534,11 @@ def get_changes(db_new, db_old):
                 # add new_parts list to added dict
                 if new_parts:
                     if brand not in added: added[brand] = {}
-                    if prodn not in added[brand]: added[brand][prodn] = ([v[1] for v in db_new["brands"][brand] if v[0] == prodn][0], [])
+                    if prodn not in added[brand]: added[brand][prodn] = ([v[1] for v in db_new["brands"][brand] if v[0] in prodn][0], [])
                     added[brand][prodn][1].extend(new_parts)
             else: # new brand or prodn, count all
                 if brand not in added: added[brand] = {}
-                if prodn not in added[brand]: added[brand][prodn] = ([v[1] for v in db_new["brands"][brand] if v[0] == prodn][0], [])
+                if prodn not in added[brand]: added[brand][prodn] = ([v[1] for v in db_new["brands"][brand] if v[0] in prodn][0], [])
                 added[brand][prodn][1].extend(new_parts)
     # check for removals
     for brand, prods in db_old['data'].items():
@@ -554,16 +554,16 @@ def get_changes(db_new, db_old):
                     # add removed_parts list to added dict
                     if removed_parts:
                         if brand not in removed: removed[brand] = {}
-                        if prodn not in removed[brand]: removed[brand][prodn] = ([v[1] for v in db_old["brands"][brand] if v[0] == prodn][0], [])
+                        if prodn not in removed[brand]: removed[brand][prodn] = ([v[1] for v in db_old["brands"][brand] if v[0] in prodn][0], [])
                         removed[brand][prodn][1].extend(removed_parts)
                 else: # entire prodn removed, count all
                     if brand not in removed: removed[brand] = {}
-                    if prodn not in removed[brand]: removed[brand][prodn] = ([v[1] for v in db_old["brands"][brand] if v[0] == prodn][0], [])
+                    if prodn not in removed[brand]: removed[brand][prodn] = ([v[1] for v in db_old["brands"][brand] if v[0] in prodn][0], [])
                     removed[brand][prodn][1].extend(removed_parts)
         else: # entire brand removed, count all
             if brand not in removed: removed[brand] = {}
             for prodn, parts in prods.items():
-                if prodn not in removed[brand]: removed[brand][prodn] = ([v[1] for v in db_old["brands"][brand] if v[0] == prodn][0], [])
+                if prodn not in removed[brand]: removed[brand][prodn] = ([v[1] for v in db_old["brands"][brand] if v[0] in prodn][0], [])
                 removed[brand][prodn][1].extend(parts)
     # check for changes
     for brand, prods in db_new['data'].items():
@@ -594,7 +594,7 @@ def get_changes(db_new, db_old):
                                 })
                         if changed_specs:
                             if brand not in changed: changed[brand] = {}
-                            if prodn not in changed[brand]: changed[brand][prodn] = ([v[1] for v in db_new["brands"][brand] if v[0] == prodn][0], [])
+                            if prodn not in changed[brand]: changed[brand][prodn] = ([v[1] for v in db_new["brands"][brand] if v[0] in prodn][0], [])
                             changed[brand][prodn][1].append((part, changed_specs))
 
     #pprint(removed, width=125)
