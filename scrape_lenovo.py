@@ -638,6 +638,8 @@ if __name__ == '__main__':
         },
         # track changes per scrape
         'changes': {},
+        # flatten prices for fast history lookup
+        'prices': {},
         # keep track of all keys encountered across all brands
         'keys': {
             'info': [],
@@ -779,6 +781,12 @@ if __name__ == '__main__':
 
     db['metadata']['timestamp'] = time.time()
 
+    # flatten price info
+    for brand, prods in db['data'].items():
+        for prod, parts in prods.items():
+            for part in parts:
+                db['prices'][part['part number']] = part['num_specs']['price']
+
     # retrieve and log changes
     if os.path.exists(f'{DB_DIR}/{DB_FILENAME}'):
         with open(f'{DB_DIR}/{DB_FILENAME}', 'r') as f:
@@ -789,7 +797,7 @@ if __name__ == '__main__':
 
     # print db summary
     for k, v in db.items():
-        if k in ['data', 'brands', 'changes']:
+        if k in ['data', 'brands', 'changes', 'prices']:
             print(f'{k} [{len(v)}]')
         else:
             print(k)

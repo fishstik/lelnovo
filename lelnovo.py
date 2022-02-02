@@ -443,20 +443,22 @@ def get_history(pn, dbs):
     for db in dbs:
         dt = datetime.utcfromtimestamp(db['metadata']['timestamp'])
         found = False
-        for brand, prods in db['data'].items():
-            if found: break
-            for prod, parts in prods.items():
+        if pn in db['prices']:
+            data.append((dt, db['prices'][pn][0], False))
+        else:
+            data.append((dt, -100, False))
+
+        if part is None:
+            found = False
+            for brand, prods in db['data'].items():
                 if found: break
-                for p in parts:
+                for prod, parts in prods.items():
                     if found: break
-                    if pn == p['part number']:
-                        if p['status'].lower() == 'unavailable':
-                            data.append((dt, p['num_specs']['price'][0], True))
-                        else:
-                            data.append((dt, p['num_specs']['price'][0], False))
-                        part = p
-                        found = True
-        if not found: data.append((dt, -100, False))
+                    for p in parts:
+                        if pn == p['part number']:
+                            part = p
+                            found = True
+                            break
 
     return data, part
 
