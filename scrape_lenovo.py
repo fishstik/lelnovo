@@ -703,6 +703,34 @@ if __name__ == '__main__':
         print(f'Getting product line names (openapi)...')
         db['brands'] = get_prodnames_openapi(s, args.region, brand_merge)
 
+        # check against data and correct data
+        prodn_corrections = []
+        for brand, prods in db['data'].items():
+            for prod, parts in prods.items():
+                #for part in parts:
+                if brand in db['brands']:
+                    found = False
+                    for brandprod in db['brands'][brand]:
+                        if brandprod[0] == prod:
+                            found = True
+                            break
+                        elif brandprod[0] in prod:
+                            prodn_corrections.append({
+                                'brand': brand,
+                                'prodn_old': prod,
+                                'prodn_new': brandprod[0],
+                            })
+                            found = True
+                            break
+                    if not found: print(f'WARNING: \'{prod}\' from data not in db[\'brands\'][{brand}]')
+                else:
+                    print(f'WARNING: \'{brand}\' in data not in db[\'brands\']')
+        for correction in prodn_corrections:
+            ps = db['data'][correction['brand']][correction['prodn_old']]
+            db['data'][correction['brand']][correction['prodn_new']] = ps
+            del db['data'][correction['brand']][correction['prodn_old']]
+            print(f'Corrected data prodnum \'{correction["prodn_old"]}\' to \'{correction["prodn_new"]}\'')
+
     # regular scrape
     else:
         print(f'Collecting brands...')
